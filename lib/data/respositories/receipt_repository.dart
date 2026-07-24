@@ -551,11 +551,11 @@ class ReceiptRepository {
   /// existing `edit_id` just as readily as against a brand-new one, the
   /// same "Cancel is just another queued update, not a separate call"
   /// convention `EstimateRepository.queueEstimateForSync` documents.
-  /// [billNumber]/[deduction]/[narration]/[entries] aren't known for an
-  /// existing receipt (the list endpoint never returns them, and this app
-  /// has no "load a receipt's full details" call) — left at their
-  /// defaults, since cancelling an existing `edit_id` shouldn't need them
-  /// resent.
+  /// [billNumber]/[deduction]/[narration]/[entries] for an existing
+  /// receipt come from `receipt_listing`'s own per-row fields — cached by
+  /// `DataSyncService` and read back off the cached [ReceiptModel] by
+  /// `ReceiptController.deleteReceipt` — so the receipt's original data
+  /// rides along unchanged with the cancel instead of going out empty.
   ///
   /// [knownToServer] says which of those two cases this is — it decides
   /// whether [syncPendingReceipts] actually sends this row or just drops
@@ -745,13 +745,17 @@ class ReceiptRepository {
   /// SQL, doesn't touch the `deleted` column. For this to work, the
   /// handler needs something like: when `$cancelled[$i] == '1'`, look up
   /// the existing receipt by `edit_id` and set `deleted = 1` on it
-  /// directly — skipping the bill/payment validation entirely for that
-  /// row, since a cancel-of-existing row's `against_bill_number` and
-  /// `payment_mode_data` are sent empty (this app has no way to fetch an
-  /// existing receipt's original bill/payment details to resend them —
-  /// the list endpoint never returns them). Until that's in place, a
-  /// cancel sent this way will either no-op or fail `"Add Payment"`,
-  /// exactly as it did before this change.
+  /// directly. A cancel-of-existing row's `against_bill_number`,
+  /// `deduction`, `narration`, and `payment_mode_data` are no longer sent
+  /// empty — `receipt_listing` returns them per row, `DataSyncService`
+  /// caches them alongside every other cached receipt field, and
+  /// `ReceiptController.deleteReceipt` reads them straight back off the
+  /// cached [ReceiptModel] and passes them into [queueReceiptForSync], so
+  /// the same original bill/payment data the receipt was created with
+  /// rides along with `cancelled: "1"` here, unchanged. Until the backend
+  /// actually acts on `cancelled`, though, a cancel sent this way will
+  /// still either no-op or fail `"Add Payment"`, exactly as it did before
+  /// this change.
   ///
   /// A receipt cancelled before it ever synced (see
   /// [cancelPendingReceipt]) is still dropped from the queue first,

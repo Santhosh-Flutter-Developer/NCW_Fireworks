@@ -22,13 +22,26 @@ class ReceiptListItem {
   /// For a pending row, the queue entry's own id. Empty for a synced row.
   final String localId;
 
-  /// Remarks text and Payment Mode/Bank/Amount rows — only ever known for
-  /// a pending row (see `ReceiptModel.narration`'s doc for why a synced
-  /// row can't carry these). Used to build the offline A5 report (see
-  /// `ReceiptPdfBuilder`); `entries` uses the same shape
-  /// `ReceiptRepository.queueReceiptForSync` stores.
+  /// Remarks text and Payment Mode/Bank/Amount rows. For a pending row
+  /// these come straight from the queue entry; for a synced row
+  /// `receipt_listing` now returns them itself (`narration`,
+  /// `payment_mode_data`) so this app can resend a synced receipt's own
+  /// original data — unchanged except `cancelled: "1"` — when it's later
+  /// cancelled (see `ReceiptRepository.syncPendingReceipts`). `entries`
+  /// uses the same `payment_mode_id`/`bank_id`/`amount` shape either way
+  /// — `ReceiptRepository.queueReceiptForSync` stores it, and
+  /// `ReceiptPaymentEntry.fromJson` parses it back out.
   final String narration;
   final List<Map<String, dynamic>> entries;
+
+  /// The bill (estimate) number this receipt was raised against — echoed
+  /// back on cancel as `against_bill_number`. Only ever known for a
+  /// synced row; a pending row's own `bill_number` is read separately by
+  /// `ReceiptRepository.queueReceiptForSync`'s caller.
+  final String billNumber;
+
+  /// Deduction amount, echoed back on cancel as-is.
+  final String deduction;
 
   const ReceiptListItem({
     required this.receiptId,
@@ -41,9 +54,12 @@ class ReceiptListItem {
     this.localId = '',
     this.narration = '',
     this.entries = const [],
+    this.billNumber = '',
+    this.deduction = '',
   });
 
   factory ReceiptListItem.fromJson(Map<String, dynamic> json) {
+    final rawPaymentModeData = json['payment_mode_data'];
     return ReceiptListItem(
       receiptId: json['receipt_id']?.toString() ?? '',
       receiptNumber: json['receipt_number']?.toString() ?? '',
@@ -51,6 +67,15 @@ class ReceiptListItem {
       agentName: json['agent_name']?.toString() ?? '',
       partyName: json['party_name']?.toString() ?? '',
       totalAmount: readNum(json['total_amount']),
+      narration: json['narration']?.toString() ?? '',
+      entries: rawPaymentModeData is List
+          ? rawPaymentModeData
+              .whereType<Map>()
+              .map(Map<String, dynamic>.from)
+              .toList()
+          : const [],
+      billNumber: json['against_bill_number']?.toString() ?? '',
+      deduction: json['deduction']?.toString() ?? '',
     );
   }
 
@@ -76,6 +101,8 @@ class ReceiptListItem {
       entries: rawEntries is List
           ? rawEntries.whereType<Map>().map(Map<String, dynamic>.from).toList()
           : const [],
+      billNumber: row['bill_number']?.toString() ?? '',
+      deduction: row['deduction']?.toString() ?? '',
     );
   }
 }

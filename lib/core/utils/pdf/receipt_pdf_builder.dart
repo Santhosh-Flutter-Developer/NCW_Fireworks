@@ -17,26 +17,22 @@ import 'indian_currency_words.dart';
 /// — so Print and Download both work with no network call, exactly like
 /// `EstimatePdfBuilder` / `QuotationPdfBuilder`.
 ///
-/// **A real limitation, not a bug**: `receipt_listing` (the endpoint that
-/// backs the Receipt list/cache — see `ReceiptRepository.listReceipts`)
-/// only ever returns `receipt_id`, `receipt_number`, `receipt_date`,
-/// `agent_name`, `party_name` and `total_amount` per row — never the
-/// Remarks narration or the Payment Mode/Bank/Amount breakdown that
-/// `rpt_receipt_a5.php` prints. There is no "load one receipt's full
-/// details" endpoint either. So:
+/// `receipt_listing` (the endpoint that backs the Receipt list/cache —
+/// see `ReceiptRepository.listReceipts`) returns `narration` and
+/// `payment_mode_data` per row in addition to the summary fields, so both
+/// a still-pending and an already-synced receipt carry the Remarks/
+/// Payment Mode detail `rpt_receipt_a5.php` prints:
 /// - A receipt still sitting in this device's pending-sync queue (created
-///   here, not yet sent to `receipt.php`) carries that detail already —
-///   see `ReceiptModel.narration`/`ReceiptModel.paymentLines`, sourced
-///   from `ReceiptRepository.queueReceiptForSync`'s own cached row — and
-///   prints exactly like the sample above.
-/// - A receipt that's already synced only has the summary fields, so its
-///   offline PDF shows the Remarks/Payment Mode boxes as "—" rather than
-///   inventing content. Party contact/city are filled in on a best-effort
-///   basis from the cached Party list by name (`PartyRepository
-///   .cachedPartyByName`) — see `ReceiptController._buildReceiptPdfBytes`.
-///   Full parity for synced receipts would need `receipt_listing` to
-///   start returning `narration`/`payment_mode_data` per row so this app
-///   could cache it.
+///   here, not yet sent to `receipt.php`) carries that detail from
+///   `ReceiptRepository.queueReceiptForSync`'s own cached row — see
+///   `ReceiptModel.narration`/`ReceiptModel.paymentLines`.
+/// - A synced receipt carries it from `receipt_listing` itself, cached by
+///   `DataSyncService` alongside the summary fields. Party contact/city
+///   are still filled in on a best-effort basis from the cached Party
+///   list by name (`PartyRepository.cachedPartyByName`) — see
+///   `ReceiptController._buildReceiptPdfBytes` — since `receipt_listing`
+///   only ever carries a combined name/mobile/city snapshot, not
+///   separate fields.
 class ReceiptPdfBuilder {
   static const _greenLabel = PdfColor.fromInt(0xFF008200); // rgb(0,130,0)
   static const _borderColor = PdfColor.fromInt(0xFF000000);

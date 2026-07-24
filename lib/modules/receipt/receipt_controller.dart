@@ -271,6 +271,8 @@ class ReceiptController extends GetxController {
           city: partySnapshot.city.isNotEmpty
               ? partySnapshot.city
               : (party?.city ?? ''),
+          billNumber: item.billNumber,
+          deduction: item.deduction,
         );
       }));
 
@@ -455,11 +457,21 @@ class ReceiptController extends GetxController {
       localId: IdGenerator.generate(),
       editId: receipt.id,
       receiptNumber: receipt.receiptNumber,
+      billNumber: receipt.billNumber,
       partyName: receipt.partyName,
       agentName: receipt.agentName,
       receiptDate: _apiDateFormat.format(receipt.date),
       receiptDateIso: _serverStoredDateFormat.format(receipt.date),
+      deduction: receipt.deduction,
+      narration: receipt.narration,
       totalAmount: receipt.totalAmount,
+      entries: receipt.paymentLines
+          .map((l) => ReceiptPaymentEntry(
+                paymentModeId: l.paymentModeId,
+                bankId: l.bankId,
+                amount: l.amount.toString(),
+              ))
+          .toList(),
       cancelled: true,
       knownToServer: true,
     );

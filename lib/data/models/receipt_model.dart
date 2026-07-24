@@ -26,16 +26,20 @@ class ReceiptModel {
   final String localId;
 
   /// The Remarks text shown on the printed/downloaded A5 report (see
-  /// `ReceiptPdfBuilder`). Only ever populated for a receipt still in the
-  /// pending-sync queue — `receipt_listing` (the endpoint backing a
-  /// synced row) never returns this field, and there's no "load one
-  /// receipt's full details" call to fetch it after the fact. Empty for
-  /// every synced row.
+  /// `ReceiptPdfBuilder`) — sourced from the pending-sync queue for a row
+  /// still awaiting Sync, or from `receipt_listing`'s own `narration`
+  /// field for a synced row.
   final String narration;
 
-  /// The Payment Mode/Bank/Amount breakdown shown on the report. Same
-  /// caveat as [narration]: only known for a still-pending receipt.
+  /// The Payment Mode/Bank/Amount breakdown shown on the report — same
+  /// source split as [narration] (`payment_mode_data` on a synced row).
   final List<ReceiptPaymentLine> paymentLines;
+
+  /// The bill (estimate) number this receipt was raised against.
+  final String billNumber;
+
+  /// Deduction amount recorded against this receipt.
+  final String deduction;
 
   /// Best-effort contact details for the report's "To" block, filled in
   /// from the cached Party list by name (see
@@ -60,6 +64,8 @@ class ReceiptModel {
     this.paymentLines = const [],
     this.mobileNumber = '',
     this.city = '',
+    this.billNumber = '',
+    this.deduction = '',
   });
 }
 

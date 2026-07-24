@@ -535,6 +535,10 @@ class DataSyncService extends GetxService {
                 'agent_name': r.agentName,
                 'party_name': r.partyName,
                 'total_amount': r.totalAmount,
+                'against_bill_number': r.billNumber,
+                'deduction': r.deduction,
+                'narration': r.narration,
+                'payment_mode_data': r.entries,
               })
           .toList();
       for (final p in result.partyList) {
