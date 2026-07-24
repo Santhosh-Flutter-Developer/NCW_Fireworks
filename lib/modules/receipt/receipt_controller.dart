@@ -12,6 +12,7 @@ import '../../core/network/api_exception.dart';
 import '../../core/services/session_service.dart';
 import '../../core/utils/id_generator.dart';
 import '../../data/models/billing_item_model.dart';
+import '../../data/models/party/party_list_response_model.dart';
 import '../../data/models/party_model.dart';
 import '../../data/models/receipt/id_name.dart';
 import '../../data/models/receipt_model.dart';
@@ -212,10 +213,23 @@ class ReceiptController extends GetxController {
             _tryParse(_serverStoredDateFormat, item.receiptDate) ??
             DateTime.now();
 
-        // Best-effort contact/city for the offline report's "To" block —
-        // a receipt itself never stores these (see `ReceiptModel`'s doc),
-        // so they're looked up from the cached Party list by name.
-        final party = _partyRepository.cachedPartyByName(item.partyName);
+        // `receipt_listing`'s `party_name` isn't a plain name — it's a
+        // combined snapshot the server already builds (see
+        // `ReceiptRepository`'s own `party_name_mobile_city` fallback,
+        // and compare `SAN - RE025`'s garbled "To" block against the
+        // true `rpt_receipt_a5.php` output in `RE020`): something like
+        // `Kamatchi Mills (9585031254) - Chennai`. Split it back apart so
+        // the report can print name/city/contact on their own lines like
+        // the real one does, instead of dumping the whole string onto
+        // the name line.
+        final partySnapshot = _splitPartyNameSnapshot(item.partyName);
+
+        // The snapshot's own embedded mobile/city (as of when the
+        // receipt was made) is preferred since it's what the real report
+        // would show; the cached Party list — looked up by the *cleaned*
+        // name, so it actually has a chance of matching — is only a
+        // fallback for whichever piece the snapshot didn't carry.
+        final party = _partyRepository.cachedPartyByName(partySnapshot.name);
 
         // Only a still-pending row's `entries` carry ids (never names —
         // see `ReceiptRepository.cachedPaymentModeName`'s doc); resolve
@@ -242,15 +256,21 @@ class ReceiptController extends GetxController {
           agentName: _stripHtml(item.agentName).isEmpty
               ? 'Direct'
               : _stripHtml(item.agentName),
-          partyName: item.partyName,
+          partyName: partySnapshot.name.isEmpty
+              ? item.partyName
+              : partySnapshot.name,
           totalAmount: item.totalAmount,
           status: rowStatus,
           isPending: item.isPending,
           localId: item.localId,
           narration: item.narration,
           paymentLines: paymentLines,
-          mobileNumber: party?.mobileNumber ?? '',
-          city: party?.city ?? '',
+          mobileNumber: partySnapshot.mobile.isNotEmpty
+              ? partySnapshot.mobile
+              : (party?.mobileNumber ?? ''),
+          city: partySnapshot.city.isNotEmpty
+              ? partySnapshot.city
+              : (party?.city ?? ''),
         );
       }));
 
@@ -300,6 +320,43 @@ class ReceiptController extends GetxController {
 
   String _stripHtml(String raw) =>
       raw.replaceAll(RegExp(r'<[^>]*>'), '').trim();
+
+  /// Splits a `receipt_listing` row's `party_name` — a combined snapshot
+  /// like `Kamatchi Mills (9585031254) - Chennai` — back into its
+  /// `(name, mobile, city)` pieces. Any piece the string didn't carry
+  /// comes back empty rather than guessed at. See the call site in
+  /// [loadReceipts] for why this exists.
+  ///
+  /// Best-effort by nature: a party name that itself legitimately
+  /// contains " - " (e.g. a shop styled "Sri Lakshmi - Fireworks") would
+  /// get misread as `name: "Sri Lakshmi", city: "Fireworks"`. There's no
+  /// way to tell the two apart from this single field alone; this only
+  /// matters for cosmetics on the offline report, never for anything
+  /// that identifies the party (that's still done by [ReceiptListItem]'s
+  /// own `party_id`/matching, not this parsed name).
+  ({String name, String mobile, String city}) _splitPartyNameSnapshot(
+      String raw) {
+    var name = raw.trim();
+    if (name.isEmpty) return (name: '', mobile: '', city: '');
+
+    var mobile = '';
+    final mobileMatch = RegExp(r'\(([^()]*)\)').firstMatch(name);
+    if (mobileMatch != null) {
+      mobile = mobileMatch.group(1)?.trim() ?? '';
+      name = (name.substring(0, mobileMatch.start) +
+              name.substring(mobileMatch.end))
+          .trim();
+    }
+
+    var city = '';
+    final dashIndex = name.lastIndexOf(' - ');
+    if (dashIndex != -1) {
+      city = name.substring(dashIndex + 3).trim();
+      name = name.substring(0, dashIndex).trim();
+    }
+
+    return (name: name, mobile: mobile, city: city);
+  }
 
   /// The current page's rows, as returned by the server — the list view
   /// still calls this `visibleReceipts` to match its existing layout code.

@@ -224,7 +224,7 @@ class ReceiptPdfBuilder {
           ),
           pw.Text(' : ', style: const pw.TextStyle(fontSize: 9)),
           pw.Expanded(
-            child: pw.Text(value.isEmpty ? '—' : value,
+            child: pw.Text(value,
                 style: const pw.TextStyle(fontSize: 8)),
           ),
         ],
