@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import '../../core/network/api_exception.dart';
 import '../../core/services/session_service.dart';
+import '../../core/utils/id_generator.dart';
 import '../../data/dummy/dummy_data.dart';
 import '../../data/models/party_model.dart';
 import '../../data/respositories/party_repository.dart';
@@ -400,8 +401,9 @@ class PartyController extends GetxController {
     // into the sync queue at all; it just lives in the in-memory list on
     // this device until turned into a real save.
     if (asDraft) {
-      _applyLocally(asDraft: true, balance: balance, name: name);
-      Get.back();
+      final savedParty =
+          _applyLocally(asDraft: true, balance: balance, name: name);
+      Get.back(result: savedParty);
       Get.snackbar('Saved as draft', 'Party saved as a draft on this device',
           snackPosition: SnackPosition.BOTTOM);
       return true;
@@ -409,16 +411,21 @@ class PartyController extends GetxController {
 
     isSaving.value = true;
     try {
-      // A pending (not-yet-synced) row keeps its own queue-entry id so
-      // re-editing it before syncing replaces that entry rather than
-      // adding a second one. A row already confirmed on the server uses
-      // its real party_id as the edit_id so the batch sync updates it in
-      // place instead of creating a duplicate. A brand-new party gets a
-      // fresh local id and an empty edit_id.
-      final localId = editingParty == null
+      // The server no longer assigns `party_id` itself for a brand-new
+      // party — the client generates it once, at creation, and sends it
+      // as `edit_id` right away (the same pattern already used for
+      // Quotation/Estimate ids): the server just stores whatever unique
+      // id it's given. Editing an already-synced party reuses its real
+      // server id unchanged; editing a still-pending (not yet synced)
+      // row reuses the id it was already given, so re-saving before
+      // Sync replaces that same queue entry instead of adding a
+      // duplicate. Either way, `edit_id` and the queue's `local_id` key
+      // end up being the same value — there's no separate "local-only"
+      // id to track anymore.
+      final String editId = editingParty == null
           ? _newLocalId()
-          : (editingParty!.localId ?? editingParty!.serverPartyId ?? _newLocalId());
-      final editId = editingParty?.serverPartyId ?? '';
+          : (editingParty!.serverPartyId ?? editingParty!.localId ?? _newLocalId());
+      final localId = editId;
 
       await _partyRepository.queuePartyForSync(
         localId: localId,
@@ -442,7 +449,28 @@ class PartyController extends GetxController {
       );
 
       final wasCreate = editingParty == null;
-      Get.back();
+      final wasAlreadySynced = editingParty?.serverPartyId != null;
+      final savedParty = PartyModel(
+        id: editId,
+        serverPartyId: wasAlreadySynced ? editId : null,
+        localId: wasAlreadySynced ? null : editId,
+        name: name,
+        phone: phoneCtrl.text.trim(),
+        email: emailCtrl.text.trim(),
+        address: addressCtrl.text.trim(),
+        state: formState.value,
+        district: formDistrict.value ?? '',
+        city: formCity.value ?? '',
+        othersCity:
+            formCity.value == 'Others' ? othersCityCtrl.text.trim() : '',
+        pincode: pincodeCtrl.text.trim(),
+        identification: identificationCtrl.text.trim(),
+        gstin: gstinCtrl.text.trim().toUpperCase(),
+        openingBalance: balance,
+        balanceType: formBalanceType.value,
+        isPending: true,
+      );
+      Get.back(result: savedParty);
       Get.snackbar(
         wasCreate ? 'Saved offline' : 'Updated offline',
         'Saved on this device. Tap Sync when you\'re online to send it to the server.',
@@ -459,14 +487,17 @@ class PartyController extends GetxController {
     }
   }
 
-  /// A short, unique-enough id for a brand-new pending-queue entry.
-  String _newLocalId() =>
-      'LOCAL-${DateTime.now().microsecondsSinceEpoch}';
+  /// A fresh, unique-enough id for a brand-new pending-queue entry.
+  /// Shaped like the server's own `party_id` (a long lowercase hex
+  /// string) rather than an obviously-local placeholder, so a party
+  /// created offline looks and behaves the same as a synced one
+  /// everywhere its id is displayed or matched against.
+  String _newLocalId() => IdGenerator.generate();
 
   /// Mirrors the confirmed save into the in-memory list that backs the
   /// Party list screen. Runs after either a successful API call or a
   /// local-only save.
-  void _applyLocally({
+  PartyModel _applyLocally({
     required bool asDraft,
     required double balance,
     required String name,
@@ -489,29 +520,29 @@ class PartyController extends GetxController {
         ..balanceType = formBalanceType.value
         ..isDraft = asDraft;
       parties.refresh();
+      return editingParty!;
     } else {
-      parties.insert(
-        0,
-        PartyModel(
-          id: 'P${(parties.length + 1).toString().padLeft(3, '0')}',
-          agent: formAgent.value ?? '',
-          name: name,
-          phone: phoneCtrl.text.trim(),
-          email: emailCtrl.text.trim(),
-          address: addressCtrl.text.trim(),
-          state: formState.value,
-          district: formDistrict.value ?? '',
-          city: formCity.value ?? '',
-          othersCity:
-              formCity.value == 'Others' ? othersCityCtrl.text.trim() : '',
-          pincode: pincodeCtrl.text.trim(),
-          identification: identificationCtrl.text.trim(),
-          gstin: gstinCtrl.text.trim().toUpperCase(),
-          openingBalance: balance,
-          balanceType: formBalanceType.value,
-          isDraft: asDraft,
-        ),
+      final created = PartyModel(
+        id: 'P${(parties.length + 1).toString().padLeft(3, '0')}',
+        agent: formAgent.value ?? '',
+        name: name,
+        phone: phoneCtrl.text.trim(),
+        email: emailCtrl.text.trim(),
+        address: addressCtrl.text.trim(),
+        state: formState.value,
+        district: formDistrict.value ?? '',
+        city: formCity.value ?? '',
+        othersCity:
+            formCity.value == 'Others' ? othersCityCtrl.text.trim() : '',
+        pincode: pincodeCtrl.text.trim(),
+        identification: identificationCtrl.text.trim(),
+        gstin: gstinCtrl.text.trim().toUpperCase(),
+        openingBalance: balance,
+        balanceType: formBalanceType.value,
+        isDraft: asDraft,
       );
+      parties.insert(0, created);
+      return created;
     }
   }
 

@@ -794,6 +794,26 @@ class EstimationController extends GetxController {
     _syncMoneyControllers();
   }
 
+  /// Called after the "+ Add Party" flow (opened from this form's Party
+  /// field) creates a new party — or edits one, if that flow is ever
+  /// reused for editing. Merges it into the local `parties` dropdown
+  /// list (so it's selectable again if the picker is reopened) and
+  /// selects it immediately, without needing a network round-trip.
+  void addAndSelectParty(PartyModel party) {
+    final idx = parties.indexWhere((p) =>
+        (party.serverPartyId != null &&
+            party.serverPartyId!.isNotEmpty &&
+            p.serverPartyId == party.serverPartyId) ||
+        (party.localId != null && p.localId == party.localId) ||
+        p.id == party.id);
+    if (idx == -1) {
+      parties.insert(0, party);
+    } else {
+      parties[idx] = party;
+    }
+    selectedParty.value = party;
+  }
+
   void startCreate() {
     editingEstimation = null;
     _convertQuotationId = null;

@@ -7,8 +7,10 @@ import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_text_styles.dart';
 import '../../data/models/party_model.dart';
 import '../../data/models/quotation/id_name.dart';
+import '../../routes/app_routes.dart';
 import '../../widgets/common_widgets.dart';
 import '../../widgets/searchable_picker_sheet.dart';
+import '../party/party_controller.dart';
 import 'quotation_controller.dart';
 
 class QuotationFormView extends GetView<QuotationController> {
@@ -205,11 +207,20 @@ class QuotationFormView extends GetView<QuotationController> {
           ],
         ),
         const SizedBox(height: 12),
-        Obx(() => _pickerTile(
-              label: 'Party *',
-              value: controller.selectedParty.value?.name,
-              onTap: () => _openPartyPicker(context),
-            )),
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: [
+            Expanded(
+              child: Obx(() => _pickerTile(
+                    label: 'Party *',
+                    value: controller.selectedParty.value?.name,
+                    onTap: () => _openPartyPicker(context),
+                  )),
+            ),
+            const SizedBox(width: 8),
+            _addPartyButton(context),
+          ],
+        ),
         const SizedBox(height: 22),
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -639,6 +650,43 @@ class QuotationFormView extends GetView<QuotationController> {
       ),
       onSelected: (p) => controller.selectedParty.value = p,
     );
+  }
+
+  /// A compact "+" button sitting next to the Party field, matching the
+  /// height of the picker tile beside it. Opens the Party form fresh
+  /// (Add Party) and, once saved — Draft or Submit, online or off —
+  /// selects whatever party it created straight into this quotation.
+  Widget _addPartyButton(BuildContext context) {
+    return SizedBox(
+      height: 58,
+      width: 48,
+      child: Material(
+        color: AppColors.surfaceElevated,
+        borderRadius: BorderRadius.circular(14),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(14),
+          onTap: () => _openAddParty(context),
+          child: Ink(
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: AppColors.divider),
+            ),
+            child: Icon(Icons.add_rounded, color: AppColors.gold),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _openAddParty(BuildContext context) async {
+    final partyController = Get.isRegistered<PartyController>()
+        ? Get.find<PartyController>()
+        : Get.put(PartyController());
+    partyController.startCreate();
+    final result = await Get.toNamed(AppRoutes.partyForm);
+    if (result is PartyModel) {
+      controller.addAndSelectParty(result);
+    }
   }
 
   void _openProductPicker(BuildContext context) {
