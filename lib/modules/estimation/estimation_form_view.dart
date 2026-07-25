@@ -444,17 +444,9 @@ class EstimationFormView extends GetView<EstimationController> {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text('Round Off', style: AppTextStyles.body),
-              SizedBox(
-                width: 100,
-                child: TextField(
-                  textAlign: TextAlign.end,
-                  keyboardType:
-                      const TextInputType.numberWithOptions(decimal: true),
-                  controller: controller.roundOffCtrl,
-                  decoration: const InputDecoration(hintText: '0.00'),
-                  onChanged: (v) =>
-                      controller.roundOff.value = double.tryParse(v) ?? 0,
-                ),
+              Text(
+                '${controller.roundOff >= 0 ? '+' : '-'}₹${controller.roundOff.abs().toStringAsFixed(2)}',
+                style: AppTextStyles.body,
               ),
             ],
           ),

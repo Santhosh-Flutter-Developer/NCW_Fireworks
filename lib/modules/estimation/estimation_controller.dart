@@ -137,7 +137,6 @@ class EstimationController extends GetxController {
   final section2Discount = 0.0.obs;
   final charges = <ChargeLine>[].obs;
   final Rx<String?> selectedChargeId = Rx<String?>(null);
-  final roundOff = 0.0.obs;
   final isLoadingForm = false.obs;
   final isSaving = false.obs;
 
@@ -148,7 +147,6 @@ class EstimationController extends GetxController {
   final section2AddCtrl = TextEditingController();
   final section2DiscountCtrl = TextEditingController();
   final chargeValueCtrl = TextEditingController();
-  final roundOffCtrl = TextEditingController();
 
   @override
   void onInit() {
@@ -190,7 +188,6 @@ class EstimationController extends GetxController {
     section2AddCtrl.dispose();
     section2DiscountCtrl.dispose();
     chargeValueCtrl.dispose();
-    roundOffCtrl.dispose();
     super.onClose();
   }
 
@@ -203,7 +200,6 @@ class EstimationController extends GetxController {
     section1DiscountCtrl.text = fmt(section1Discount.value);
     section2AddCtrl.text = fmt(section2Add.value);
     section2DiscountCtrl.text = fmt(section2Discount.value);
-    roundOffCtrl.text = fmt(roundOff.value);
   }
 
   // ---- List loading / filtering / pagination ------------------------------
@@ -655,8 +651,16 @@ class EstimationController extends GetxController {
       (section1Add.value - section1Discount.value) +
       (section2Add.value - section2Discount.value);
   double get formChargesTotal => charges.fold(0.0, (sum, c) => sum + c.value);
-  double get formTotal =>
-      formSubTotal + formAdjustments + formChargesTotal + roundOff.value;
+
+  /// Automatically rounds the pre-round total to the nearest whole rupee —
+  /// no more manual entry. Positive when the total rounds up, negative
+  /// when it rounds down.
+  double get roundOff {
+    final preRound = formSubTotal + formAdjustments + formChargesTotal;
+    return double.parse((preRound.roundToDouble() - preRound).toStringAsFixed(2));
+  }
+
+  double get formTotal => formSubTotal + formAdjustments + formChargesTotal + roundOff;
 
   // ---- Form: charges --------------------------------------------------------
 
@@ -752,7 +756,6 @@ class EstimationController extends GetxController {
     section2Discount.value = 0;
     charges.clear();
     selectedChargeId.value = null;
-    roundOff.value = 0;
     productOptions.clear();
     _syncMoneyControllers();
   }
@@ -1237,7 +1240,6 @@ class EstimationController extends GetxController {
     section2Discount.value = 0;
     charges.clear();
     selectedChargeId.value = null;
-    roundOff.value = 0;
     _syncMoneyControllers();
   }
 

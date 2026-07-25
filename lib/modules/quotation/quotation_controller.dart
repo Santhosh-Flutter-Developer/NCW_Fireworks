@@ -105,7 +105,6 @@ class QuotationController extends GetxController {
   final section1Discount = 0.0.obs;
   final section2Add = 0.0.obs;
   final section2Discount = 0.0.obs;
-  final roundOff = 0.0.obs;
   final isLoadingForm = false.obs;
   final isSaving = false.obs;
 
@@ -115,7 +114,6 @@ class QuotationController extends GetxController {
   final section1DiscountCtrl = TextEditingController();
   final section2AddCtrl = TextEditingController();
   final section2DiscountCtrl = TextEditingController();
-  final roundOffCtrl = TextEditingController();
 
   @override
   void onInit() {
@@ -155,7 +153,6 @@ class QuotationController extends GetxController {
     section1DiscountCtrl.dispose();
     section2AddCtrl.dispose();
     section2DiscountCtrl.dispose();
-    roundOffCtrl.dispose();
     super.onClose();
   }
 
@@ -168,7 +165,6 @@ class QuotationController extends GetxController {
     section1DiscountCtrl.text = fmt(section1Discount.value);
     section2AddCtrl.text = fmt(section2Add.value);
     section2DiscountCtrl.text = fmt(section2Discount.value);
-    roundOffCtrl.text = fmt(roundOff.value);
   }
 
   // ---- List loading / filtering / pagination ------------------------------
@@ -606,7 +602,16 @@ class QuotationController extends GetxController {
   double get formAdjustments =>
       (section1Add.value - section1Discount.value) +
       (section2Add.value - section2Discount.value);
-  double get formTotal => formSubTotal + formAdjustments + roundOff.value;
+
+  /// Automatically rounds the pre-round total to the nearest whole rupee —
+  /// no more manual entry. Positive when the total rounds up, negative
+  /// when it rounds down.
+  double get roundOff {
+    final preRound = formSubTotal + formAdjustments;
+    return double.parse((preRound.roundToDouble() - preRound).toStringAsFixed(2));
+  }
+
+  double get formTotal => formSubTotal + formAdjustments + roundOff;
 
   // ---- Form: pricelist selection ------------------------------------------
 
@@ -644,7 +649,6 @@ class QuotationController extends GetxController {
     section1Discount.value = 0;
     section2Add.value = 0;
     section2Discount.value = 0;
-    roundOff.value = 0;
     productOptions.clear();
     _syncMoneyControllers();
   }
@@ -1001,7 +1005,6 @@ class QuotationController extends GetxController {
     section1Discount.value = 0;
     section2Add.value = 0;
     section2Discount.value = 0;
-    roundOff.value = 0;
     _syncMoneyControllers();
   }
 

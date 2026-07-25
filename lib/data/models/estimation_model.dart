@@ -54,7 +54,6 @@ class EstimationModel {
 
   /// Named charges stacked on top of the subtotal — "Charges" row.
   List<ChargeLine> charges;
-  double roundOff;
 
   /// `estimate_listing` only returns a grand total and a qty label per
   /// row — not the full line items. When set (list-sourced rows), [total]
@@ -104,7 +103,6 @@ class EstimationModel {
     this.section2Add = 0,
     this.section2Discount = 0,
     List<ChargeLine>? charges,
-    this.roundOff = 0,
     this.serverGrandTotal,
     this.serverQtyLabel,
     this.receiptId = "",
@@ -130,6 +128,15 @@ class EstimationModel {
   double get adjustments =>
       (section1Add - section1Discount) + (section2Add - section2Discount);
   double get chargesTotal => charges.fold(0, (sum, c) => sum + c.value);
+
+  /// Automatically rounds the pre-round total to the nearest whole rupee —
+  /// no manual entry involved. Positive when the total rounds up, negative
+  /// when it rounds down.
+  double get roundOff {
+    final preRound = subTotal + adjustments + chargesTotal;
+    return double.parse((preRound.roundToDouble() - preRound).toStringAsFixed(2));
+  }
+
   double get total =>
       serverGrandTotal ?? (subTotal + adjustments + chargesTotal + roundOff);
 

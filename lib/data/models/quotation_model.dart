@@ -23,7 +23,6 @@ class QuotationModel {
   double section1Discount;
   double section2Add;
   double section2Discount;
-  double roundOff;
 
   /// `quotation_listing` only returns a grand total and a qty label per
   /// row — not the full line items. When set (list-sourced rows), [total]
@@ -68,7 +67,6 @@ class QuotationModel {
     this.section1Discount = 0,
     this.section2Add = 0,
     this.section2Discount = 0,
-    this.roundOff = 0,
     this.serverGrandTotal,
     this.serverQtyLabel,
     this.estimateId = '',
@@ -93,8 +91,16 @@ class QuotationModel {
   double get subTotal => section1Total + section2Total;
   double get adjustments =>
       (section1Add - section1Discount) + (section2Add - section2Discount);
-  double get total =>
-      serverGrandTotal ?? (subTotal + adjustments + roundOff);
+
+  /// Automatically rounds the pre-round total to the nearest whole rupee —
+  /// no manual entry involved. Positive when the total rounds up, negative
+  /// when it rounds down.
+  double get roundOff {
+    final preRound = subTotal + adjustments;
+    return double.parse((preRound.roundToDouble() - preRound).toStringAsFixed(2));
+  }
+
+  double get total => serverGrandTotal ?? (subTotal + adjustments + roundOff);
 
   /// Kept for screens/dashboards that only care about the grand total.
   double get grandTotal => total;
