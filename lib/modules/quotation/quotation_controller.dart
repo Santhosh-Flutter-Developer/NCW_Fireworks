@@ -686,7 +686,9 @@ class QuotationController extends GetxController {
   /// including ones added from the Estimation picker, since the queue is
   /// shared — so they keep showing up here across tab switches, app
   /// restarts, and the other module, exactly like an ordinary catalogue
-  /// product.
+  /// product. Listed *first*, ahead of the synced catalogue, so a
+  /// newly-added custom product is immediately visible at the top of
+  /// the picker instead of buried after every catalogue product.
   Future<void> loadProductsForSelectedPricelist() async {
     final pricelistId = selectedPricelistId.value;
     if (pricelistId == null || pricelistId.isEmpty) {
@@ -698,7 +700,7 @@ class QuotationController extends GetxController {
     final custom = _customProductRepository
         .cachedCustomProductsForPricelist(pricelistId)
         .map(QuotationProductOption.fromCustomRow);
-    productOptions.assignAll([...catalogue, ...custom]);
+    productOptions.assignAll([...custom, ...catalogue]);
   }
 
   /// Adds a new custom product — from the Add Custom Product form opened

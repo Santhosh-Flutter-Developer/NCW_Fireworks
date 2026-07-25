@@ -82,7 +82,12 @@ class ProductPriceRepository {
   /// Rows in the cache only carry pricelist/product *names* (same as the
   /// API), not ids, so a [pricelistId]/[productId] filter is resolved to
   /// a name via the cached dropdown options first, then matched by name.
-  /// Returns every cached row matching the given filters, unpaginated.
+  /// Returns every cached row matching the given filters, unpaginated —
+  /// including any custom products added from the Quotation/Estimation
+  /// product pickers that haven't been synced to the server yet (see
+  /// `CustomProductRepository`/`CacheKeys.customProductPending`), listed
+  /// first, ahead of the already-synced catalogue, so a newly-added one
+  /// is immediately visible here too without waiting for the next Sync.
   List<ProductPriceRow> _filterCachedRows({
     required String pricelistId,
     required String productId,
@@ -107,12 +112,26 @@ class ProductPriceRepository {
       return null;
     }
 
+    // Pending custom products only carry a `pricelist_id`, so resolve it
+    // to the same `pricelist_name` an already-synced row would carry,
+    // via the same cached dropdown used for the filter above.
+    final pendingCustom = _cache
+        .getJsonList(CacheKeys.customProductPending)
+        .map((row) => ProductPriceRow.fromCustomRow(
+              row,
+              pricelistName:
+                  nameForId(pricelists, row['pricelist_id']?.toString() ?? '') ??
+                      '',
+              sno: 0,
+            ))
+        .toList();
+
     final pricelistName =
         pricelistId.isEmpty ? null : nameForId(pricelists, pricelistId);
     final productName =
         productId.isEmpty ? null : nameForId(products, productId);
 
-    return rows.where((r) {
+    final filtered = [...pendingCustom, ...rows].where((r) {
       if (pricelistName != null && r.pricelistName != pricelistName) {
         return false;
       }
@@ -121,6 +140,21 @@ class ProductPriceRepository {
       }
       return true;
     }).toList();
+
+    // Re-number S.No sequentially now that pending custom rows have been
+    // folded in at the front — keeps the column meaningful instead of
+    // repeating "0" for every unsynced custom product.
+    return [
+      for (var i = 0; i < filtered.length; i++)
+        ProductPriceRow(
+          sno: i + 1,
+          pricelistName: filtered[i].pricelistName,
+          productName: filtered[i].productName,
+          price: filtered[i].price,
+          unit: filtered[i].unit,
+          discountEnabled: filtered[i].discountEnabled,
+        ),
+    ];
   }
 
   ProductPriceListResponse _priceListFromCache({

@@ -50,6 +50,33 @@ class ProductPriceRow {
           (json['discount'] as String?)?.trim().toUpperCase() == 'ON',
     );
   }
+
+  /// Builds a row for a custom product added from the Quotation/
+  /// Estimation product picker (see `CustomProductRepository`,
+  /// `CacheKeys.customProductPending`) that hasn't been synced to the
+  /// server yet, so it can show up in the Price Upload list the same way
+  /// an ordinary catalogue row does. [pricelistName] is resolved by the
+  /// caller from the queued row's `pricelist_id`, since the pending
+  /// queue itself only carries the id, not the name.
+  factory ProductPriceRow.fromCustomRow(
+    Map<String, dynamic> row, {
+    required String pricelistName,
+    required int sno,
+  }) {
+    final rawPrice = row['price'];
+    final price = rawPrice is num
+        ? rawPrice.toDouble()
+        : double.tryParse(rawPrice?.toString() ?? '') ?? 0;
+
+    return ProductPriceRow(
+      sno: sno,
+      pricelistName: pricelistName,
+      productName: row['product_name']?.toString().trim() ?? '',
+      price: price,
+      unit: row['unit_name']?.toString().trim() ?? '',
+      discountEnabled: false,
+    );
+  }
 }
 
 /// One entry of the `head.pricelist` master list used to populate the

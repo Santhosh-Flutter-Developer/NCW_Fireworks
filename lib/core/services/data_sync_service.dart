@@ -115,14 +115,26 @@ class DataSyncService extends GetxService {
       _syncOne('Syncing price list…', _syncPriceList);
 
   /// Re-syncs only the Quotation list's offline cache (all three tabs) —
-  /// used by the Sync button on the Quotation screen.
-  Future<void> syncQuotations() =>
-      _syncOne('Syncing quotations…', _syncQuotations);
+  /// used by the Sync button on the Quotation screen. Once that (and any
+  /// queued custom products it pushed along the way) has synced
+  /// successfully, also refreshes the Price Upload cache — see
+  /// [_syncOne]'s `andThen` — so a custom product added from the
+  /// Quotation picker shows up there with no separate Sync needed.
+  Future<void> syncQuotations() => _syncOne(
+        'Syncing quotations…',
+        _syncQuotations,
+        andThen: _syncPriceList,
+      );
 
   /// Re-syncs only the Estimation list's offline cache (all three tabs) —
-  /// used by the Sync button on the Estimate screen.
-  Future<void> syncEstimations() =>
-      _syncOne('Syncing estimations…', _syncEstimations);
+  /// used by the Sync button on the Estimate screen. Same `andThen`
+  /// price list refresh as [syncQuotations], for custom products added
+  /// from the Estimation picker.
+  Future<void> syncEstimations() => _syncOne(
+        'Syncing estimations…',
+        _syncEstimations,
+        andThen: _syncPriceList,
+      );
 
   /// Re-syncs only the Receipt list's offline cache (both tabs) — used by
   /// the Sync button on the Receipt screen.
@@ -133,12 +145,26 @@ class DataSyncService extends GetxService {
   /// [syncAll]'s isSyncing/lastError/statusMessage handling, but for just
   /// one section instead of all five. Doesn't touch [CacheKeys.lastSyncedAt]
   /// since that's meant to reflect a *full* sync, not a partial one.
-  Future<void> _syncOne(String label, Future<void> Function() step) async {
+  ///
+  /// [andThen], if given, only runs once [step] has completed without
+  /// throwing (checked via [lastError], which [_runStep] sets on
+  /// failure) — e.g. [syncQuotations]/[syncEstimations] use this to
+  /// refresh the Price Upload cache only after their own sync (including
+  /// any custom products it pushed) has actually succeeded, not when it
+  /// failed and left the queue untouched for a retry.
+  Future<void> _syncOne(
+    String label,
+    Future<void> Function() step, {
+    Future<void> Function()? andThen,
+  }) async {
     if (isSyncing.value) return;
     isSyncing.value = true;
     lastError.value = null;
     try {
       await _runStep(label, step);
+      if (lastError.value == null && andThen != null) {
+        await _runStep('Syncing price list…', andThen);
+      }
     } finally {
       isSyncing.value = false;
       statusMessage.value = '';
