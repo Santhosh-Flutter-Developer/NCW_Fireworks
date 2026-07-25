@@ -18,7 +18,18 @@ class DashboardView extends GetView<DashboardController> {
     return AppScaffold(
       routeName: AppRoutes.dashboard,
       title: 'Dashboard',
-      body: SizedBox(),
+      body: Center(
+  child: Padding(
+    padding: const EdgeInsets.all(24.0),
+    child: ConstrainedBox(
+      constraints: const BoxConstraints(maxWidth: 320),
+      child: Image.asset(
+        'assets/images/ic_logo.png',
+        fit: BoxFit.contain,
+      ),
+    ),
+  ),
+),
       /*body: LayoutBuilder(
         builder: (context, constraints) {
           return SingleChildScrollView(
