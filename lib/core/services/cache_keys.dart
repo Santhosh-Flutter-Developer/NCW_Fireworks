@@ -118,20 +118,17 @@ class CacheKeys {
   /// Product form — same source/refresh as [customProductCategories].
   static const customProductUnits = 'custom_product_units';
 
-  /// Queue of custom products added from the Quotation product picker
-  /// that haven't been sent to `product.php` yet. Every custom product a
-  /// user adds while picking products for a quotation — online or
-  /// offline — lands here first; only a manual tap of the Sync button on
-  /// the Quotation screen ever drains it (see
+  /// Queue of custom products added from either the Quotation or
+  /// Estimation product picker that haven't been sent to `product.php`
+  /// yet. Deliberately shared between both modules — see
+  /// `CustomProductRepository`'s class doc — so a custom product added
+  /// while building a quotation shows up in the Estimation picker (for
+  /// the same pricelist) immediately, and vice versa. Only a manual tap
+  /// of the Sync button on *either* screen ever drains it (see
   /// `CustomProductRepository.queueCustomProduct` /
   /// `syncPendingCustomProducts`), and always *before* that Sync pushes
-  /// the quotations themselves, so a quotation line referencing a custom
+  /// the quotations/estimates themselves, so a line referencing a custom
   /// product's locally-generated id is never sent before the server
   /// knows that id.
-  static const quotationCustomProductPending = 'quotation_custom_product_pending';
-
-  /// Same as [quotationCustomProductPending], but for custom products
-  /// added from the Estimation product picker — drained by the Sync
-  /// button on the Estimation screen instead.
-  static const estimationCustomProductPending = 'estimation_custom_product_pending';
+  static const customProductPending = 'custom_product_pending';
 }

@@ -786,9 +786,10 @@ class EstimationController extends GetxController {
   /// caches at login/Sync (`EstimateRepository.cachedProductsForPricelist`).
   /// No network call, online or off. Also folds in any custom products
   /// added for this pricelist that haven't been synced yet (see
-  /// [addCustomProduct]), so they keep showing up in the picker across
-  /// tab switches and app restarts, exactly like an ordinary catalogue
-  /// product.
+  /// [addCustomProduct]) — including ones added from the Quotation
+  /// picker, since the queue is shared — so they keep showing up here
+  /// across tab switches, app restarts, and the other module, exactly
+  /// like an ordinary catalogue product.
   Future<void> loadProductsForSelectedPricelist() async {
     final pricelistId = selectedPricelistId.value;
     if (pricelistId == null || pricelistId.isEmpty) {
@@ -798,8 +799,7 @@ class EstimationController extends GetxController {
     final catalogue =
         _estimateRepository.cachedProductsForPricelist(pricelistId);
     final custom = _customProductRepository
-        .cachedCustomProductsForPricelist(
-            CustomProductModule.estimation, pricelistId)
+        .cachedCustomProductsForPricelist(pricelistId)
         .map(EstimateProductOption.fromCustomRow);
     productOptions.assignAll([...catalogue, ...custom]);
   }
@@ -807,12 +807,18 @@ class EstimationController extends GetxController {
   /// Adds a new custom product — from the Add Custom Product form opened
   /// off the product picker — to the pricelist currently selected there.
   /// Offline-only, always: the product is queued via
-  /// [CustomProductRepository.queueCustomProduct] and only ever sent to
-  /// `product.php` when the person taps Sync on the Estimation screen
-  /// (see `DataSyncService`). The generated [IdGenerator] id doubles as
-  /// this product's permanent id from here on, so it can be picked and
-  /// added to the estimate immediately, with no network round trip.
-  Future<bool> addCustomProduct({
+  /// [CustomProductRepository.queueCustomProduct] (a queue shared with
+  /// Quotation, so this product shows up there too — see
+  /// [loadProductsForSelectedPricelist]) and only ever sent to
+  /// `product.php` when the person taps Sync on either screen (see
+  /// `DataSyncService`). The generated [IdGenerator] id doubles as this
+  /// product's permanent id from here on, so it can be picked and added
+  /// to the estimate immediately, with no network round trip.
+  ///
+  /// Returns the newly created [EstimateProductOption] (or `null` on
+  /// failure) so the product picker can select it right away, the same
+  /// as tapping "Add to Cart" on an ordinary product.
+  Future<EstimateProductOption?> addCustomProduct({
     required String categoryId,
     required String categoryName,
     required String productName,
@@ -825,12 +831,11 @@ class EstimationController extends GetxController {
       Get.snackbar('Select a pricelist',
           'Choose a pricelist before adding a custom product',
           snackPosition: SnackPosition.BOTTOM);
-      return false;
+      return null;
     }
 
     final editId = IdGenerator.generate();
     await _customProductRepository.queueCustomProduct(
-      module: CustomProductModule.estimation,
       editId: editId,
       categoryId: categoryId,
       categoryName: categoryName,
@@ -841,7 +846,7 @@ class EstimationController extends GetxController {
       price: price.toString(),
     );
     await loadProductsForSelectedPricelist();
-    return true;
+    return productOptions.firstWhereOrNull((p) => p.productId == editId);
   }
 
   // ---- Form: create / edit bootstrap ------------------------------------

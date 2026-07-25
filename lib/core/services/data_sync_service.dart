@@ -250,12 +250,12 @@ class DataSyncService extends GetxService {
   Future<void> _syncQuotations() async {
     final creator = _sessionService.currentSession.value?.userId;
     if (creator != null && creator.isNotEmpty) {
-      // Push any custom products added from the Quotation product picker
-      // first — a queued quotation line may reference one of these by
-      // its locally-generated id as `product_id`, so the server needs to
+      // Push any custom products added from either product picker first
+      // (shared queue — see `CustomProductRepository`) — a queued
+      // quotation line may reference one of these by its
+      // locally-generated id as `product_id`, so the server needs to
       // know that id before the quotation batch below is sent.
       await _customProductRepository.syncPendingCustomProducts(
-        module: CustomProductModule.quotation,
         creator: creator,
       );
       await _quotationRepository.syncPendingQuotations(creator: creator);
@@ -395,11 +395,11 @@ class DataSyncService extends GetxService {
   Future<void> _syncEstimations() async {
     final creator = _sessionService.currentSession.value?.userId;
     if (creator != null && creator.isNotEmpty) {
-      // Same reasoning as `_syncQuotations`: push custom products added
-      // from the Estimation product picker before the estimates that may
-      // reference one of them by its locally-generated id.
+      // Same reasoning as `_syncQuotations`: push any custom products
+      // added from either product picker (shared queue) before the
+      // estimates that may reference one of them by its
+      // locally-generated id.
       await _customProductRepository.syncPendingCustomProducts(
-        module: CustomProductModule.estimation,
         creator: creator,
       );
       await _estimateRepository.syncPendingEstimates(creator: creator);

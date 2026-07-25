@@ -111,15 +111,21 @@ class _QuotationProductPickerViewState
         required unitId,
         required unitName,
         required price,
-      }) =>
-          controller.addCustomProduct(
-        categoryId: categoryId,
-        categoryName: categoryName,
-        productName: productName,
-        unitId: unitId,
-        unitName: unitName,
-        price: price,
-      ),
+      }) async {
+        final option = await controller.addCustomProduct(
+          categoryId: categoryId,
+          categoryName: categoryName,
+          productName: productName,
+          unitId: unitId,
+          unitName: unitName,
+          price: price,
+        );
+        // Auto-select the new product the moment it's created — same
+        // as tapping "Add to Cart" on an ordinary catalogue product —
+        // so it shows up already picked once the sheet closes.
+        if (option != null) _setQty(option, 1);
+        return option != null;
+      },
     );
   }
 
