@@ -106,4 +106,32 @@ class CacheKeys {
   /// ISO-8601 timestamp string of the last time [DataSyncService.syncAll]
   /// completed (even if some individual steps failed).
   static const lastSyncedAt = 'meta_last_synced_at';
+
+  /// Category dropdown options (`{category_id, category_name}`) for the
+  /// Add Custom Product form — synced once at login/Sync from
+  /// `product.php`'s `add_custom_product` call
+  /// (see `CustomProductRepository.getInitData`), read offline by both
+  /// the Quotation and Estimation product pickers.
+  static const customProductCategories = 'custom_product_categories';
+
+  /// Unit dropdown options (`{unit_id, unit_name}`) for the Add Custom
+  /// Product form — same source/refresh as [customProductCategories].
+  static const customProductUnits = 'custom_product_units';
+
+  /// Queue of custom products added from the Quotation product picker
+  /// that haven't been sent to `product.php` yet. Every custom product a
+  /// user adds while picking products for a quotation — online or
+  /// offline — lands here first; only a manual tap of the Sync button on
+  /// the Quotation screen ever drains it (see
+  /// `CustomProductRepository.queueCustomProduct` /
+  /// `syncPendingCustomProducts`), and always *before* that Sync pushes
+  /// the quotations themselves, so a quotation line referencing a custom
+  /// product's locally-generated id is never sent before the server
+  /// knows that id.
+  static const quotationCustomProductPending = 'quotation_custom_product_pending';
+
+  /// Same as [quotationCustomProductPending], but for custom products
+  /// added from the Estimation product picker — drained by the Sync
+  /// button on the Estimation screen instead.
+  static const estimationCustomProductPending = 'estimation_custom_product_pending';
 }

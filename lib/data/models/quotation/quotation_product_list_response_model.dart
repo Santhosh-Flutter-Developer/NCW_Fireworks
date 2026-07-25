@@ -24,6 +24,12 @@ class QuotationProductOption {
   /// way estimates do — kept for parity/display only, may read as 0.
   final int currentStock;
 
+  /// True when this option came from the on-device Add Custom Product
+  /// queue (see `CustomProductRepository`) rather than the synced
+  /// pricelist catalogue — carried onto the [BillingItemModel] line it
+  /// produces so the form can badge it as "Custom".
+  final bool isCustom;
+
   const QuotationProductOption({
     required this.productId,
     required this.productName,
@@ -32,6 +38,7 @@ class QuotationProductOption {
     this.rate = 0,
     this.productDiscount = false,
     this.currentStock = 0,
+    this.isCustom = false,
   });
 
   factory QuotationProductOption.fromJson(Map<String, dynamic> json) {
@@ -43,6 +50,21 @@ class QuotationProductOption {
       rate: readNum(json['rate']),
       productDiscount: json['product_discount']?.toString() == '1',
       currentStock: readIntSafe(json['current_stock']),
+    );
+  }
+
+  /// Builds an option from one row of `CustomProductRepository`'s pending
+  /// queue (`{edit_id, product_name, unit_id, unit_name, price, ...}`) —
+  /// lets a not-yet-synced custom product show up in the picker exactly
+  /// like an ordinary catalogue product.
+  factory QuotationProductOption.fromCustomRow(Map<String, dynamic> row) {
+    return QuotationProductOption(
+      productId: row['edit_id']?.toString() ?? '',
+      productName: row['product_name']?.toString() ?? '',
+      unitId: row['unit_id']?.toString() ?? '',
+      unitName: row['unit_name']?.toString() ?? '',
+      rate: readNum(row['price']),
+      isCustom: true,
     );
   }
 }

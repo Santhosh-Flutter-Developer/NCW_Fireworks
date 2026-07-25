@@ -18,6 +18,15 @@ class BillingItemModel {
   /// pricelist discount flag when the estimate is saved.
   int section;
 
+  /// True when this line came from the Add Custom Product form (see
+  /// `QuotationController.addCustomProduct` /
+  /// `EstimationController.addCustomProduct`) rather than the synced
+  /// product catalogue. [productId] for a custom line is a
+  /// locally-generated id that also doubles as the id `product.php`
+  /// stores it under once `CustomProductRepository.syncPendingCustomProducts`
+  /// sends it — display-only otherwise (e.g. a "Custom" badge).
+  bool isCustom;
+
   BillingItemModel({
     required this.productId,
     required this.productName,
@@ -27,6 +36,7 @@ class BillingItemModel {
     this.unit = 'BOX',
     this.unitId = '',
     this.section = 1,
+    this.isCustom = false,
   });
 
   double get amount {

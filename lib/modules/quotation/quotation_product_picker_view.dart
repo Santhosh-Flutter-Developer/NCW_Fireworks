@@ -7,6 +7,7 @@ import '../../data/models/quotation/id_name.dart';
 import '../../data/models/quotation/quotation_product_list_response_model.dart';
 import '../../routes/app_routes.dart';
 import '../../widgets/common_widgets.dart';
+import '../../widgets/custom_product_form_sheet.dart';
 import 'quotation_controller.dart';
 
 /// A product picked on this screen, kept alongside the exact pricelist
@@ -98,6 +99,30 @@ class _QuotationProductPickerViewState
     controller.selectPricelist(pricelist);
   }
 
+  void _addCustomProduct() {
+    showAddCustomProductSheet(
+      context: context,
+      categories: controller.customCategories,
+      units: controller.customUnits,
+      onSubmit: ({
+        required categoryId,
+        required categoryName,
+        required productName,
+        required unitId,
+        required unitName,
+        required price,
+      }) =>
+          controller.addCustomProduct(
+        categoryId: categoryId,
+        categoryName: categoryName,
+        productName: productName,
+        unitId: unitId,
+        unitName: unitName,
+        price: price,
+      ),
+    );
+  }
+
   void _confirm() {
     if (_selections.isEmpty) {
       Get.snackbar('No products selected', 'Pick at least one product first',
@@ -136,6 +161,11 @@ class _QuotationProductPickerViewState
       appBar: AppBar(
         title: const Text('Select Products'),
         actions: [
+          IconButton(
+            tooltip: 'Add custom product',
+            onPressed: _addCustomProduct,
+            icon: const Icon(Icons.add_box_outlined),
+          ),
           IconButton(
             tooltip: _isGrid ? 'List view' : 'Grid view',
             onPressed: () => setState(() => _isGrid = !_isGrid),
@@ -514,10 +544,32 @@ class _ProductCard extends StatelessWidget {
               overflow: TextOverflow.ellipsis,
             ),
             const SizedBox(height: 4),
-            Text(
-              '₹${option.rate.toStringAsFixed(2)} / ${option.unitName.isEmpty ? 'Pcs' : option.unitName}',
-              style: AppTextStyles.caption
-                  .copyWith(color: AppColors.gold, fontWeight: FontWeight.w700),
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    '₹${option.rate.toStringAsFixed(2)} / ${option.unitName.isEmpty ? 'Pcs' : option.unitName}',
+                    style: AppTextStyles.caption.copyWith(
+                        color: AppColors.gold, fontWeight: FontWeight.w700),
+                  ),
+                ),
+                if (option.isCustom) ...[
+                  const SizedBox(width: 4),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 6, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: AppColors.gold.withOpacity(0.15),
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: Text('Custom',
+                        style: AppTextStyles.caption.copyWith(
+                            fontSize: 9,
+                            color: AppColors.gold,
+                            fontWeight: FontWeight.w700)),
+                  ),
+                ],
+              ],
             ),
             if (option.currentStock > 0) ...[
               const SizedBox(height: 2),

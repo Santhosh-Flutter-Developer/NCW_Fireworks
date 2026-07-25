@@ -12,11 +12,13 @@ import '../../core/services/session_service.dart';
 import '../../core/utils/id_generator.dart';
 import '../../core/utils/percent_amount_parser.dart';
 import '../../data/models/billing_item_model.dart';
+import '../../data/models/custom_product/custom_product_models.dart';
 import '../../data/models/estimate/estimate_product_list_response_model.dart';
 import '../../data/models/estimate/id_name.dart';
 import '../../data/models/estimation_model.dart';
 import '../../data/models/party_model.dart';
 import '../../data/models/quotation_model.dart';
+import '../../data/respositories/custom_product_repository.dart';
 import '../../data/respositories/estimate_repository.dart';
 import '../../data/respositories/party_repository.dart';
 import '../../routes/app_routes.dart';
@@ -48,13 +50,17 @@ class EstimationController extends GetxController {
     EstimateRepository? estimateRepository,
     SessionService? sessionService,
     PartyRepository? partyRepository,
+    CustomProductRepository? customProductRepository,
   })  : _estimateRepository = estimateRepository ?? EstimateRepository(),
         _sessionService = sessionService ?? Get.find<SessionService>(),
-        _partyRepository = partyRepository ?? PartyRepository();
+        _partyRepository = partyRepository ?? PartyRepository(),
+        _customProductRepository =
+            customProductRepository ?? CustomProductRepository();
 
   final EstimateRepository _estimateRepository;
   final SessionService _sessionService;
   final PartyRepository _partyRepository;
+  final CustomProductRepository _customProductRepository;
 
   static final DateFormat _apiDateFormat = DateFormat('dd-MM-yyyy');
   static final DateFormat _serverStoredDateFormat = DateFormat('yyyy-MM-dd');
@@ -68,6 +74,11 @@ class EstimationController extends GetxController {
   final otherChargesOptions = <IdName>[].obs;
   final productOptions = <EstimateProductOption>[].obs;
   final isLoadingProducts = false.obs;
+
+  // ---- Add Custom Product dropdown data (synced once at login/Sync via
+  // `CustomProductRepository`/`DataSyncService`) --------------------------
+  final customCategories = <CustomProductOption>[].obs;
+  final customUnits = <CustomProductOption>[].obs;
 
   List<String> get pricelistNames =>
       pricelistOptions.map((e) => e.name).toList();
@@ -168,7 +179,17 @@ class EstimationController extends GetxController {
       section2Discount.value =
           resolvePercentOrAmount(_section2DiscountRaw, formSection2Total);
     });
+    loadCustomProductDropdowns();
     resetForFreshVisit();
+  }
+
+  /// Category/unit dropdown options for the Add Custom Product form —
+  /// read straight from the offline cache [DataSyncService] populates at
+  /// login/Sync (`CustomProductRepository.cachedCategories`/
+  /// [cachedUnits]). No network call, online or off.
+  void loadCustomProductDropdowns() {
+    customCategories.assignAll(_customProductRepository.cachedCategories());
+    customUnits.assignAll(_customProductRepository.cachedUnits());
   }
 
   /// Called from the Discount text fields on every keystroke. Accepts a
@@ -763,15 +784,64 @@ class EstimationController extends GetxController {
   /// Products offered under the selected pricelist, for the "Add Item"
   /// picker — read straight from the offline catalogue [DataSyncService]
   /// caches at login/Sync (`EstimateRepository.cachedProductsForPricelist`).
-  /// No network call, online or off.
+  /// No network call, online or off. Also folds in any custom products
+  /// added for this pricelist that haven't been synced yet (see
+  /// [addCustomProduct]), so they keep showing up in the picker across
+  /// tab switches and app restarts, exactly like an ordinary catalogue
+  /// product.
   Future<void> loadProductsForSelectedPricelist() async {
     final pricelistId = selectedPricelistId.value;
     if (pricelistId == null || pricelistId.isEmpty) {
       productOptions.clear();
       return;
     }
-    productOptions.assignAll(
-        _estimateRepository.cachedProductsForPricelist(pricelistId));
+    final catalogue =
+        _estimateRepository.cachedProductsForPricelist(pricelistId);
+    final custom = _customProductRepository
+        .cachedCustomProductsForPricelist(
+            CustomProductModule.estimation, pricelistId)
+        .map(EstimateProductOption.fromCustomRow);
+    productOptions.assignAll([...catalogue, ...custom]);
+  }
+
+  /// Adds a new custom product — from the Add Custom Product form opened
+  /// off the product picker — to the pricelist currently selected there.
+  /// Offline-only, always: the product is queued via
+  /// [CustomProductRepository.queueCustomProduct] and only ever sent to
+  /// `product.php` when the person taps Sync on the Estimation screen
+  /// (see `DataSyncService`). The generated [IdGenerator] id doubles as
+  /// this product's permanent id from here on, so it can be picked and
+  /// added to the estimate immediately, with no network round trip.
+  Future<bool> addCustomProduct({
+    required String categoryId,
+    required String categoryName,
+    required String productName,
+    required String unitId,
+    required String unitName,
+    required double price,
+  }) async {
+    final pricelistId = selectedPricelistId.value;
+    if (pricelistId == null || pricelistId.isEmpty) {
+      Get.snackbar('Select a pricelist',
+          'Choose a pricelist before adding a custom product',
+          snackPosition: SnackPosition.BOTTOM);
+      return false;
+    }
+
+    final editId = IdGenerator.generate();
+    await _customProductRepository.queueCustomProduct(
+      module: CustomProductModule.estimation,
+      editId: editId,
+      categoryId: categoryId,
+      categoryName: categoryName,
+      productName: productName,
+      unitId: unitId,
+      unitName: unitName,
+      pricelistId: pricelistId,
+      price: price.toString(),
+    );
+    await loadProductsForSelectedPricelist();
+    return true;
   }
 
   // ---- Form: create / edit bootstrap ------------------------------------
@@ -1249,6 +1319,7 @@ class EstimationController extends GetxController {
           unit: option.unitName.isEmpty ? 'Pcs' : option.unitName,
           unitId: option.unitId,
           section: section,
+          isCustom: option.isCustom,
         ));
       }
     }

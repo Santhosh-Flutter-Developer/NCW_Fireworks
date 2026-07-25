@@ -2,6 +2,7 @@ import 'dart:developer' as developer;
 
 import 'package:get/get.dart';
 
+import '../../data/respositories/custom_product_repository.dart';
 import '../../data/respositories/estimate_repository.dart';
 import '../../data/respositories/party_repository.dart';
 import '../../data/respositories/product_price_repository.dart';
@@ -50,6 +51,7 @@ class DataSyncService extends GetxService {
     QuotationRepository? quotationRepository,
     EstimateRepository? estimateRepository,
     ReceiptRepository? receiptRepository,
+    CustomProductRepository? customProductRepository,
     LocalCacheService? cache,
     SessionService? sessionService,
   })  : _partyRepository = partyRepository ?? PartyRepository(),
@@ -58,6 +60,8 @@ class DataSyncService extends GetxService {
         _quotationRepository = quotationRepository ?? QuotationRepository(),
         _estimateRepository = estimateRepository ?? EstimateRepository(),
         _receiptRepository = receiptRepository ?? ReceiptRepository(),
+        _customProductRepository =
+            customProductRepository ?? CustomProductRepository(),
         _cache = cache ?? Get.find<LocalCacheService>(),
         _sessionService = sessionService ?? Get.find<SessionService>();
 
@@ -66,6 +70,7 @@ class DataSyncService extends GetxService {
   final QuotationRepository _quotationRepository;
   final EstimateRepository _estimateRepository;
   final ReceiptRepository _receiptRepository;
+  final CustomProductRepository _customProductRepository;
   final LocalCacheService _cache;
   final SessionService _sessionService;
 
@@ -245,6 +250,14 @@ class DataSyncService extends GetxService {
   Future<void> _syncQuotations() async {
     final creator = _sessionService.currentSession.value?.userId;
     if (creator != null && creator.isNotEmpty) {
+      // Push any custom products added from the Quotation product picker
+      // first — a queued quotation line may reference one of these by
+      // its locally-generated id as `product_id`, so the server needs to
+      // know that id before the quotation batch below is sent.
+      await _customProductRepository.syncPendingCustomProducts(
+        module: CustomProductModule.quotation,
+        creator: creator,
+      );
       await _quotationRepository.syncPendingQuotations(creator: creator);
     }
 
@@ -346,6 +359,30 @@ class DataSyncService extends GetxService {
           }));
     }
     await _cache.putJsonList(CacheKeys.quotationProducts, allProducts);
+    await _syncCustomProductCatalogue();
+  }
+
+  /// Refreshes the category/unit dropdowns for the Add Custom Product
+  /// form (shared by both the Quotation and Estimation product pickers)
+  /// from `product.php`'s `add_custom_product` call. Called from both
+  /// catalogue syncs — whichever of Quotation/Estimation Sync runs
+  /// first keeps this current, so it never depends on a full [syncAll].
+  Future<void> _syncCustomProductCatalogue() async {
+    _announce('Syncing custom product options');
+    try {
+      final init = await _customProductRepository.getInitData();
+      await _cache.putJsonList(
+        CacheKeys.customProductCategories,
+        init.categories.map((c) => {'id': c.id, 'name': c.name}).toList(),
+      );
+      await _cache.putJsonList(
+        CacheKeys.customProductUnits,
+        init.units.map((u) => {'id': u.id, 'name': u.name}).toList(),
+      );
+    } catch (_) {
+      // Keep whatever was already cached rather than failing the whole
+      // catalogue sync over this one lookup.
+    }
   }
 
   /// Pushes anything in the pending-sync queue to `estimate.php` in one
@@ -358,6 +395,13 @@ class DataSyncService extends GetxService {
   Future<void> _syncEstimations() async {
     final creator = _sessionService.currentSession.value?.userId;
     if (creator != null && creator.isNotEmpty) {
+      // Same reasoning as `_syncQuotations`: push custom products added
+      // from the Estimation product picker before the estimates that may
+      // reference one of them by its locally-generated id.
+      await _customProductRepository.syncPendingCustomProducts(
+        module: CustomProductModule.estimation,
+        creator: creator,
+      );
       await _estimateRepository.syncPendingEstimates(creator: creator);
     }
 
@@ -501,6 +545,7 @@ class DataSyncService extends GetxService {
       });
     }
     await _cache.putJsonList(CacheKeys.estimationOtherCharges, chargeRows);
+    await _syncCustomProductCatalogue();
   }
 
   Future<void> _syncReceipts() async {

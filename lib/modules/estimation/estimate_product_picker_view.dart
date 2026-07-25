@@ -7,6 +7,7 @@ import '../../data/models/estimate/estimate_product_list_response_model.dart';
 import '../../data/models/estimate/id_name.dart';
 import '../../routes/app_routes.dart';
 import '../../widgets/common_widgets.dart';
+import '../../widgets/custom_product_form_sheet.dart';
 import 'estimation_controller.dart';
 
 /// A product picked on this screen, kept alongside the exact pricelist
@@ -97,6 +98,30 @@ class _EstimateProductPickerViewState extends State<EstimateProductPickerView> {
     controller.selectPricelist(pricelist);
   }
 
+  void _addCustomProduct() {
+    showAddCustomProductSheet(
+      context: context,
+      categories: controller.customCategories,
+      units: controller.customUnits,
+      onSubmit: ({
+        required categoryId,
+        required categoryName,
+        required productName,
+        required unitId,
+        required unitName,
+        required price,
+      }) =>
+          controller.addCustomProduct(
+        categoryId: categoryId,
+        categoryName: categoryName,
+        productName: productName,
+        unitId: unitId,
+        unitName: unitName,
+        price: price,
+      ),
+    );
+  }
+
   void _confirm() {
     if (_selections.isEmpty) {
       Get.snackbar('No products selected', 'Pick at least one product first',
@@ -135,6 +160,11 @@ class _EstimateProductPickerViewState extends State<EstimateProductPickerView> {
       appBar: AppBar(
         title: const Text('Select Products'),
         actions: [
+          IconButton(
+            tooltip: 'Add custom product',
+            onPressed: _addCustomProduct,
+            icon: const Icon(Icons.add_box_outlined),
+          ),
           IconButton(
             tooltip: _isGrid ? 'List view' : 'Grid view',
             onPressed: () => setState(() => _isGrid = !_isGrid),
