@@ -425,6 +425,7 @@ class EstimationFormView extends GetView<EstimationController> {
             addCtrl: controller.section1AddCtrl,
             discountValue: controller.section1Discount,
             discountCtrl: controller.section1DiscountCtrl,
+            onDiscountChanged: controller.setSection1DiscountInput,
           ),
           const Divider(height: 24),
           _adjustRow(
@@ -434,6 +435,7 @@ class EstimationFormView extends GetView<EstimationController> {
             addCtrl: controller.section2AddCtrl,
             discountValue: controller.section2Discount,
             discountCtrl: controller.section2DiscountCtrl,
+            onDiscountChanged: controller.setSection2DiscountInput,
           ),
           const Divider(height: 24),
           _summaryRow('Subtotal', controller.formSubTotal),
@@ -565,6 +567,7 @@ class EstimationFormView extends GetView<EstimationController> {
     required TextEditingController addCtrl,
     required RxDouble discountValue,
     required TextEditingController discountCtrl,
+    required ValueChanged<String> onDiscountChanged,
   }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -586,7 +589,12 @@ class EstimationFormView extends GetView<EstimationController> {
             const SizedBox(width: 10),
             Expanded(
               child: _valueField(
-                  label: 'Discount', rx: discountValue, ctrl: discountCtrl),
+                label: 'Discount',
+                rx: discountValue,
+                ctrl: discountCtrl,
+                allowPercent: true,
+                onChanged: onDiscountChanged,
+              ),
             ),
           ],
         ),
@@ -594,20 +602,32 @@ class EstimationFormView extends GetView<EstimationController> {
     );
   }
 
-  Widget _valueField(
-      {required String label,
-      required RxDouble rx,
-      required TextEditingController ctrl}) {
+  Widget _valueField({
+    required String label,
+    required RxDouble rx,
+    required TextEditingController ctrl,
+    bool allowPercent = false,
+    ValueChanged<String>? onChanged,
+  }) {
     return Row(
       children: [
         Text('$label: ', style: AppTextStyles.caption),
         Expanded(
           child: TextField(
             textAlign: TextAlign.end,
-            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            // Plain numeric keyboard can't type '%', so switch to text
+            // when a percentage entry ("10%") should be allowed.
+            keyboardType: allowPercent
+                ? TextInputType.text
+                : const TextInputType.numberWithOptions(decimal: true),
+            inputFormatters: [
+              FilteringTextInputFormatter.allow(
+                  allowPercent ? RegExp(r'[0-9.%]') : RegExp(r'[0-9.]')),
+            ],
             controller: ctrl,
-            decoration: const InputDecoration(hintText: 'Value'),
-            onChanged: (v) => rx.value = double.tryParse(v) ?? 0,
+            decoration: InputDecoration(
+                hintText: allowPercent ? 'Value or %' : 'Value'),
+            onChanged: onChanged ?? (v) => rx.value = double.tryParse(v) ?? 0,
           ),
         ),
       ],

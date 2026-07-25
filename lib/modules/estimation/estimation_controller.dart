@@ -10,6 +10,7 @@ import 'package:printing/printing.dart';
 import '../../core/network/api_exception.dart';
 import '../../core/services/session_service.dart';
 import '../../core/utils/id_generator.dart';
+import '../../core/utils/percent_amount_parser.dart';
 import '../../data/models/billing_item_model.dart';
 import '../../data/models/estimate/estimate_product_list_response_model.dart';
 import '../../data/models/estimate/id_name.dart';
@@ -148,10 +149,38 @@ class EstimationController extends GetxController {
   final section2DiscountCtrl = TextEditingController();
   final chargeValueCtrl = TextEditingController();
 
+  // Raw text last typed into the Discount fields — kept separately from
+  // section1Discount/section2Discount (which always hold the *resolved*
+  // rupee amount) so a "10%" entry can be re-resolved against the section
+  // total whenever items are added/removed/edited, not just at typing time.
+  String _section1DiscountRaw = '';
+  String _section2DiscountRaw = '';
+
   @override
   void onInit() {
     super.onInit();
+    // Re-resolve percentage-based discounts whenever the items backing a
+    // section total change (add/remove/qty edit), so e.g. "10%" always
+    // reflects 10% of the *current* section total rather than going stale.
+    ever(formItems, (_) {
+      section1Discount.value =
+          resolvePercentOrAmount(_section1DiscountRaw, formSection1Total);
+      section2Discount.value =
+          resolvePercentOrAmount(_section2DiscountRaw, formSection2Total);
+    });
     resetForFreshVisit();
+  }
+
+  /// Called from the Discount text fields on every keystroke. Accepts a
+  /// plain amount ("150") or a percentage of the section total ("10%").
+  void setSection1DiscountInput(String raw) {
+    _section1DiscountRaw = raw;
+    section1Discount.value = resolvePercentOrAmount(raw, formSection1Total);
+  }
+
+  void setSection2DiscountInput(String raw) {
+    _section2DiscountRaw = raw;
+    section2Discount.value = resolvePercentOrAmount(raw, formSection2Total);
   }
 
   /// Called every time the Estimate list screen is freshly entered via
@@ -200,6 +229,11 @@ class EstimationController extends GetxController {
     section1DiscountCtrl.text = fmt(section1Discount.value);
     section2AddCtrl.text = fmt(section2Add.value);
     section2DiscountCtrl.text = fmt(section2Discount.value);
+    // Loaded/reset discounts are always plain resolved amounts, never a
+    // percentage — keep the raw trackers in step so the next items-change
+    // re-resolve doesn't reapply a stale "%" against the new total.
+    _section1DiscountRaw = section1DiscountCtrl.text;
+    _section2DiscountRaw = section2DiscountCtrl.text;
   }
 
   // ---- List loading / filtering / pagination ------------------------------
