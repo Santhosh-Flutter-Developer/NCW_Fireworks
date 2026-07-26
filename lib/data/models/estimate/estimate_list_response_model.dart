@@ -40,6 +40,28 @@ class EstimateDetailChargeRow {
   });
 }
 
+/// One "Compliment Product" line inside an estimate row — a free/
+/// no-charge item added via the form's "+ Add Compliment Products"
+/// button (see `EstimationController.addComplimentSelections`), used
+/// both by a synced row's `_full` cache entry and by a pending-queue
+/// row. Carries no rate/amount — compliment products never affect the
+/// estimate's total.
+class EstimateDetailComplimentRow {
+  final String productId;
+  final String productName;
+  final String quantity;
+  final String unitId;
+  final String unitName;
+
+  const EstimateDetailComplimentRow({
+    required this.productId,
+    required this.productName,
+    required this.quantity,
+    this.unitId = '',
+    this.unitName = '',
+  });
+}
+
 /// One row from `estimate_list` in an `estimate_listing` response — or,
 /// when [isPending] is true, one row built from the on-device
 /// pending-sync queue ([CacheKeys.estimationPending]) instead.
@@ -87,6 +109,14 @@ class EstimateListItem {
   final List<EstimateDetailChargeRow> charges;
   final bool isDraft;
 
+  /// Free/no-charge "Compliment Products" attached to this estimate —
+  /// see `EstimateDetailComplimentRow`. Parsed the same way as
+  /// [products]: parallel arrays on a synced row (`compliment_product_id`/
+  /// `compliment_product_quantity`, plus name/unit if the server echoes
+  /// them), or straight from the pending queue's own `compliment_product_data`
+  /// on a not-yet-synced row.
+  final List<EstimateDetailComplimentRow> complimentProducts;
+
   /// True when this is a pending row queuing a Cancel made while offline
   /// (see `EstimationController.deleteEstimation` /
   /// `EstimateRepository.queueEstimateForSync`'s `cancelled` param). Only
@@ -121,6 +151,7 @@ class EstimateListItem {
     this.section2Discount = '',
     this.charges = const [],
     this.isDraft = false,
+    this.complimentProducts = const [],
     this.isCancelled = false,
     this.hasFullDetails = false,
   });
@@ -161,6 +192,7 @@ class EstimateListItem {
       section2Discount: json['section2_discount']?.toString() ?? '',
       charges: _readChargeRows(json),
       isDraft: json['drafted']?.toString() == '1',
+      complimentProducts: _readComplimentRows(json),
       hasFullDetails: json['_full'] == true,
     );
   }
@@ -201,6 +233,20 @@ class EstimateListItem {
             ),
     ];
 
+    final rawCompliments = row['compliment_product_data'];
+    final complimentProducts = <EstimateDetailComplimentRow>[
+      if (rawCompliments is List)
+        for (final c in rawCompliments)
+          if (c is Map)
+            EstimateDetailComplimentRow(
+              productId: c['product_id']?.toString() ?? '',
+              productName: c['product_name']?.toString() ?? '',
+              quantity: c['product_quantity']?.toString() ?? '',
+              unitId: c['unit_id']?.toString() ?? '',
+              unitName: c['unit_name']?.toString() ?? '',
+            ),
+    ];
+
     return EstimateListItem(
       estimateId: row['edit_id']?.toString() ?? '',
       estimateNumber: row['estimate_number']?.toString() ?? '',
@@ -230,6 +276,7 @@ class EstimateListItem {
       section2Discount: row['section2_discount']?.toString() ?? '',
       charges: charges,
       isDraft: row['drafted']?.toString() == '1',
+      complimentProducts: complimentProducts,
       isCancelled: row['cancelled']?.toString() == '1',
       hasFullDetails: true,
     );
@@ -284,6 +331,39 @@ class EstimateListItem {
             chargeName: at(chargeNames, i),
             type: at(chargeTypes, i),
             value: at(chargeValues, i),
+          ),
+    ];
+  }
+
+  /// Reads `compliment_product_id`/`compliment_product_quantity` (plus
+  /// `compliment_product_name`/`compliment_unit_id`/
+  /// `compliment_unit_name`, if the server echoes them back the same way
+  /// it does for [products]) off a synced `estimate_listing` row. Missing
+  /// name/unit arrays just leave those fields blank rather than failing
+  /// — `compliment_product_id`/`compliment_product_quantity` are the
+  /// only two fields this feature actually round-trips through the
+  /// server (see `EstimateRepository.syncPendingEstimates`).
+  static List<EstimateDetailComplimentRow> _readComplimentRows(
+      Map<String, dynamic> json) {
+    final productIds = readStringList(json['compliment_product_id']);
+    final productNames = readStringList(json['compliment_product_name']);
+    final productQty = readStringList(json['compliment_product_quantity']);
+    final unitIds = readStringList(json['compliment_unit_id']);
+    final unitNames = readStringList(json['compliment_unit_name']);
+
+    String at(List<String> l, int i) => i < l.length ? l[i] : '';
+
+    return [
+      for (var i = 0; i < productIds.length; i++)
+        // "N" is estimate.php's own placeholder for "nothing here" (see
+        // [_orEmpty]) — not a real product id.
+        if (productIds[i].isNotEmpty && productIds[i] != 'N')
+          EstimateDetailComplimentRow(
+            productId: productIds[i],
+            productName: at(productNames, i),
+            quantity: at(productQty, i),
+            unitId: at(unitIds, i),
+            unitName: at(unitNames, i),
           ),
     ];
   }

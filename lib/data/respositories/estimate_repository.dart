@@ -249,6 +249,16 @@ class EstimateRepository {
   /// queued too (see `EstimationController.deleteEstimation`) — the batch
   /// endpoint accepts `cancelled: "1"` on any row, synced or not, so a
   /// Cancel is just another entry in the same queue, not a separate call.
+  ///
+  /// [complimentProducts] is the free/no-charge "Compliment Products"
+  /// list from the form's "+ Add Compliment Products" button — each map
+  /// carrying `product_id`/`product_name`/`unit_id`/`unit_name`/
+  /// `product_quantity`, the same shape as one of [products]'s entries
+  /// minus the rate. Stored alongside everything else so re-opening this
+  /// pending row for editing shows the compliment products too; only
+  /// `product_id`/`product_quantity` are actually sent by
+  /// [syncPendingEstimates] (as `compliment_product_id`/
+  /// `compliment_product_quantity`).
   Future<void> queueEstimateForSync({
     required String localId,
     required String editId,
@@ -269,6 +279,7 @@ class EstimateRepository {
     String section2AddValue = '',
     String section2Discount = '',
     List<EstimateChargeLine> charges = const [],
+    List<Map<String, String>> complimentProducts = const [],
   }) async {
     final pending = _cache.getJsonList(CacheKeys.estimationPending);
     final row = <String, dynamic>{
@@ -291,6 +302,7 @@ class EstimateRepository {
       'section2_add_value': section2AddValue,
       'section2_discount': section2Discount,
       'charges': charges.map((c) => c.toJson()).toList(),
+      'compliment_product_data': complimentProducts,
     };
     final updated = [
       ...pending.where((p) => p['local_id'] != localId),
@@ -380,6 +392,22 @@ class EstimateRepository {
         }
       }
 
+      // Compliment products are sent as two parallel arrays — id and
+      // quantity only, no rate — matching the "no price" nature of a
+      // free/no-charge line.
+      final rawCompliments = row['compliment_product_data'];
+      final complimentProductIds = <String>[];
+      final complimentProductQuantities = <String>[];
+      if (rawCompliments is List) {
+        for (final c in rawCompliments) {
+          if (c is Map) {
+            complimentProductIds.add(c['product_id']?.toString() ?? '');
+            complimentProductQuantities
+                .add(c['product_quantity']?.toString() ?? '');
+          }
+        }
+      }
+
       return {
         'edit_id': row['edit_id'] ?? '',
         'estimate_number': row['estimate_number'] ?? '',
@@ -398,6 +426,8 @@ class EstimateRepository {
         'other_charges_id': chargeIds,
         'other_charges_type': chargeTypes,
         'other_charges_value': chargeValues,
+        'compliment_product_id': complimentProductIds,
+        'compliment_product_quantity': complimentProductQuantities,
       };
     }).toList();
 

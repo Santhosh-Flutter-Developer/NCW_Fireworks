@@ -41,6 +41,14 @@ class EstimationModel {
   String pricelistName;
   DateTime date;
   List<BillingItemModel> items;
+
+  /// Free/no-charge "Compliment Products" added via the Add/Edit
+  /// Estimate form's "+ Add Compliment Products" button — kept entirely
+  /// separate from [items] and never contributes to [subTotal]/[total].
+  /// Sent back to the server as `compliment_product_id`/
+  /// `compliment_product_quantity` (see
+  /// `EstimateRepository.syncPendingEstimates`).
+  List<ComplimentItemModel> complimentItems;
   DocStatus status;
   String notes;
 
@@ -96,6 +104,7 @@ class EstimationModel {
     this.pricelistName = '',
     required this.date,
     required this.items,
+    List<ComplimentItemModel>? complimentItems,
     this.status = DocStatus.draft,
     this.notes = '',
     this.section1Add = 0,
@@ -110,7 +119,8 @@ class EstimationModel {
     this.isPending = false,
     this.localId,
     this.hasFullDetails = true,
-  }) : charges = charges ?? [];
+  })  : charges = charges ?? [],
+        complimentItems = complimentItems ?? [];
 
   bool get isConverted => receiptId.isNotEmpty;
 

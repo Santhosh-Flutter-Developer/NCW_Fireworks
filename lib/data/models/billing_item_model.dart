@@ -45,6 +45,35 @@ class BillingItemModel {
   }
 }
 
+/// One "Compliment Product" line — a free/no-charge item added via the
+/// "+ Add Compliment Products" button on the Add/Edit Estimate form
+/// (`EstimateComplimentProductPickerView`), listed separately from the
+/// ordinary priced [BillingItemModel] items and shown with no rate/
+/// amount at all. Sent back to the server as parallel
+/// `compliment_product_id`/`compliment_product_quantity` arrays (see
+/// `EstimateRepository.syncPendingEstimates`).
+class ComplimentItemModel {
+  String productId;
+  String productName;
+  int quantity;
+  String unit;
+  String unitId;
+
+  /// True when this line came from the Add Custom Product form rather
+  /// than the synced product catalogue — same meaning as
+  /// [BillingItemModel.isCustom].
+  bool isCustom;
+
+  ComplimentItemModel({
+    required this.productId,
+    required this.productName,
+    this.quantity = 1,
+    this.unit = 'Pcs',
+    this.unitId = '',
+    this.isCustom = false,
+  });
+}
+
 enum DocStatus {
   draft,
   sent,

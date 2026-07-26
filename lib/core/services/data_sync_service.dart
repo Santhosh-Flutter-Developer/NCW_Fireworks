@@ -485,6 +485,16 @@ class DataSyncService extends GetxService {
                 'other_charges_type': e.charges.map((c) => c.type).join(','),
                 'other_charges_value':
                     e.charges.map((c) => c.value).join(','),
+                'compliment_product_id':
+                    e.complimentProducts.map((c) => c.productId).join(','),
+                'compliment_product_name':
+                    e.complimentProducts.map((c) => c.productName).join(','),
+                'compliment_product_quantity':
+                    e.complimentProducts.map((c) => c.quantity).join(','),
+                'compliment_unit_id':
+                    e.complimentProducts.map((c) => c.unitId).join(','),
+                'compliment_unit_name':
+                    e.complimentProducts.map((c) => c.unitName).join(','),
                 'drafted': e.isDraft ? '1' : '0',
                 '_full': true,
               })

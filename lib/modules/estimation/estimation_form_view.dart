@@ -10,6 +10,7 @@ import '../../routes/app_routes.dart';
 import '../../widgets/common_widgets.dart';
 import '../../widgets/searchable_picker_sheet.dart';
 import '../party/party_controller.dart';
+import 'estimate_compliment_product_picker_view.dart';
 import 'estimate_product_picker_view.dart';
 import 'estimation_controller.dart';
 
@@ -49,174 +50,193 @@ class EstimationFormView extends GetView<EstimationController> {
         _confirmBack();
       },
       child: Scaffold(
-      backgroundColor: AppColors.midnight,
-      appBar: AppBar(
-        title: Text(isEditing
-            ? 'Edit Estimate - ${controller.editingEstimation!.estimationNo}'
-            : controller.isConvertingFromQuotation
-                ? 'Convert to Estimate'
-                : 'Add Estimate'),
-      ),
-      body: Column(
-        children: [
-          Expanded(
-            child: Container(
-              decoration: BoxDecoration(gradient: AppColors.backgroundGradient),
-              child: SafeArea(
-                child: Obx(() {
-                  if (controller.isLoadingForm.value) {
-                    return Center(
-                      child: CircularProgressIndicator(color: AppColors.gold),
-                    );
-                  }
-                  return _formBody(context);
-                }),
+        backgroundColor: AppColors.midnight,
+        appBar: AppBar(
+          title: Text(isEditing
+              ? 'Edit Estimate - ${controller.editingEstimation!.estimationNo}'
+              : controller.isConvertingFromQuotation
+                  ? 'Convert to Estimate'
+                  : 'Add Estimate'),
+        ),
+        body: Column(
+          children: [
+            Expanded(
+              child: Container(
+                decoration:
+                    BoxDecoration(gradient: AppColors.backgroundGradient),
+                child: SafeArea(
+                  child: Obx(() {
+                    if (controller.isLoadingForm.value) {
+                      return Center(
+                        child: CircularProgressIndicator(color: AppColors.gold),
+                      );
+                    }
+                    return _formBody(context);
+                  }),
+                ),
               ),
             ),
-          ),
-          SafeArea(
-            child: Column(
-              children: [
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(14, 10, 14, 0),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: OutlinedButton(
-                          onPressed: _confirmClear,
-                          child: const Text('Clear'),
+            SafeArea(
+              child: Column(
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(14, 10, 14, 0),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: OutlinedButton(
+                            onPressed: _confirmClear,
+                            child: const Text('Clear'),
+                          ),
                         ),
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: OutlinedButton(
-                          onPressed: () => _showPreview(context),
-                          child: const Text('Preview'),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: OutlinedButton(
+                            onPressed: () => _showPreview(context),
+                            child: const Text('Preview'),
+                          ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
-                ),
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(14, 10, 14, 12),
-                  child: Obx(() => Row(
-                    children: [
-                      Expanded(
-                        child: ElevatedButton(
-                          style: ElevatedButton.styleFrom(
-                              backgroundColor: AppColors.magenta),
-                          onPressed: controller.isSaving.value
-                              ? null
-                              : () => controller.save(asDraft: true),
-                          child: const Text('Draft'),
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: ElevatedButton(
-                          style: ElevatedButton.styleFrom(
-                              backgroundColor: AppColors.success),
-                          onPressed: controller.isSaving.value
-                              ? null
-                              : () => controller.save(asDraft: false),
-                          child: controller.isSaving.value
-                              ? const SizedBox(
-                                  height: 18,
-                                  width: 18,
-                                  child: CircularProgressIndicator(
-                                      strokeWidth: 2, color: Colors.white),
-                                )
-                              : const Text('Confirm'),
-                        ),
-                      ),
-                    ],
-                  )),
-                ),
-              ],
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(14, 10, 14, 12),
+                    child: Obx(() => Row(
+                          children: [
+                            Expanded(
+                              child: ElevatedButton(
+                                style: ElevatedButton.styleFrom(
+                                    backgroundColor: AppColors.magenta),
+                                onPressed: controller.isSaving.value
+                                    ? null
+                                    : () => controller.save(asDraft: true),
+                                child: const Text('Draft'),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: ElevatedButton(
+                                style: ElevatedButton.styleFrom(
+                                    backgroundColor: AppColors.success),
+                                onPressed: controller.isSaving.value
+                                    ? null
+                                    : () => controller.save(asDraft: false),
+                                child: controller.isSaving.value
+                                    ? const SizedBox(
+                                        height: 18,
+                                        width: 18,
+                                        child: CircularProgressIndicator(
+                                            strokeWidth: 2,
+                                            color: Colors.white),
+                                      )
+                                    : const Text('Confirm'),
+                              ),
+                            ),
+                          ],
+                        )),
+                  ),
+                ],
+              ),
             ),
-          ),
-        ],
-      ),
+          ],
+        ),
       ),
     );
   }
 
   Widget _formBody(BuildContext context) {
     return ListView(
-                  padding: const EdgeInsets.fromLTRB(18, 18, 18, 160),
-                  children: [
-                    Obx(() => _GrandTotalBanner(total: controller.formTotal)),
-                    const SizedBox(height: 18),
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Expanded(
-                          child: Obx(() => _dateTile(
-                                context,
-                                label: 'Bill Date *',
-                                date: controller.estimationDate.value,
-                                onTap: () => _pickDate(
-                                    context, controller.estimationDate),
-                              )),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Obx(() => _pickerTile(
-                                label: 'Pricelist *',
-                                value: controller.selectedPricelist.value,
-                                onTap: () => _openPricelistPicker(context),
-                              )),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 12),
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.end,
-                      children: [
-                        Expanded(
-                          child: Obx(() => _pickerTile(
-                                label: 'Party *',
-                                value: controller.selectedParty.value?.name,
-                                onTap: () => _openPartyPicker(context),
-                              )),
-                        ),
-                        const SizedBox(width: 8),
-                        _addPartyButton(context),
-                      ],
-                    ),
-                    const SizedBox(height: 22),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text('Items', style: AppTextStyles.h3),
-                        TextButton.icon(
-                          onPressed: () => _openProductPicker(context),
-                          icon: const Icon(Icons.add_rounded, size: 18),
-                          label: const Text('Add Item'),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 8),
-                    Obx(() {
-                      if (controller.formItems.isEmpty) {
-                        return const EmptyState(
-                          icon: Icons.shopping_basket_outlined,
-                          title: 'No items added',
-                          subtitle:
-                              'Tap "Add Item" to add products to this estimate.',
-                        );
-                      }
-                      return Column(
-                        children: [
-                          _sectionBlock(section: 1, label: 'Section 1'),
-                          const SizedBox(height: 14),
-                          _sectionBlock(section: 2, label: 'Section 2'),
-                        ],
-                      );
-                    }),
-                    const SizedBox(height: 14),
-                    Obx(() => _totalsCard()),
-                  ],
+      padding: const EdgeInsets.fromLTRB(18, 18, 18, 160),
+      children: [
+        Obx(() => _GrandTotalBanner(total: controller.formTotal)),
+        const SizedBox(height: 18),
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: Obx(() => _dateTile(
+                    context,
+                    label: 'Bill Date *',
+                    date: controller.estimationDate.value,
+                    onTap: () => _pickDate(context, controller.estimationDate),
+                  )),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Obx(() => _pickerTile(
+                    label: 'Pricelist *',
+                    value: controller.selectedPricelist.value,
+                    onTap: () => _openPricelistPicker(context),
+                  )),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: [
+            Expanded(
+              child: Obx(() => _pickerTile(
+                    label: 'Party *',
+                    value: controller.selectedParty.value?.name,
+                    onTap: () => _openPartyPicker(context),
+                  )),
+            ),
+            const SizedBox(width: 8),
+            _addPartyButton(context),
+          ],
+        ),
+        const SizedBox(height: 22),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text('Items', style: AppTextStyles.h3),
+            TextButton.icon(
+              onPressed: () => _openProductPicker(context),
+              icon: const Icon(Icons.add_rounded, size: 18),
+              label: const Text('Add Item'),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        Obx(() {
+          if (controller.formItems.isEmpty) {
+            return const EmptyState(
+              icon: Icons.shopping_basket_outlined,
+              title: 'No items added',
+              subtitle: 'Tap "Add Item" to add products to this estimate.',
+            );
+          }
+          return Column(
+            children: [
+              _sectionBlock(section: 1, label: 'Section 1'),
+              const SizedBox(height: 14),
+              _sectionBlock(section: 2, label: 'Section 2'),
+            ],
+          );
+        }),
+        const SizedBox(height: 14),
+        Obx(() => _totalsCard()),
+        const SizedBox(height: 18),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.end,
+          children: [
+            // Text('Compliment Products', style: AppTextStyles.h3),
+            TextButton.icon(
+              onPressed: () => _openComplimentProductPicker(context),
+              icon: const Icon(Icons.add_rounded, size: 18),
+              label: const Text('Add Compliment Products'),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        Obx(() {
+          if (controller.complimentItems.isEmpty) {
+            return const SizedBox.shrink();
+          }
+          return _complimentBlock();
+        }),
+      ],
     );
   }
 
@@ -224,56 +244,56 @@ class EstimationFormView extends GetView<EstimationController> {
   // reference only — the Draft/Confirm/Clear/Preview controls now live
   // directly in `build()`'s body Column so they stay visible above the
   // keyboard without needing a separate bottomNavigationBar.
-      // bottomNavigationBar: SafeArea(
-      //   child: Column(
-      //     children: [
-      //       Padding(
-      //         padding: const EdgeInsets.fromLTRB(14, 10, 14, 12),
-      //         child: Row(
-      //           children: [
-      //             Expanded(
-      //               child: OutlinedButton(
-      //                 onPressed: () => controller.clearForm(),
-      //                 child: const Text('Clear'),
-      //               ),
-      //             ),
-      //             const SizedBox(width: 8),
-      //             Expanded(
-      //               child: OutlinedButton(
-      //                 onPressed: () => _showPreview(context),
-      //                 child: const Text('Preview'),
-      //               ),
-      //             ),
-      //           ],
-      //         ),
-      //       ),
-      //       Padding(
-      //         padding: const EdgeInsets.fromLTRB(14, 10, 14, 12),
-      //         child: Row(
-      //           children: [
-      //             Expanded(
-      //               child: ElevatedButton(
-      //                 style: ElevatedButton.styleFrom(
-      //                     backgroundColor: AppColors.success),
-      //                 onPressed: () => controller.save(asDraft: false),
-      //                 child: const Text('Confirm'),
-      //               ),
-      //             ),
-      //             const SizedBox(width: 8),
-      //             Expanded(
-      //               child: ElevatedButton(
-      //                 style: ElevatedButton.styleFrom(
-      //                     backgroundColor: AppColors.magenta),
-      //                 onPressed: () => controller.save(asDraft: true),
-      //                 child: const Text('Draft'),
-      //               ),
-      //             ),
-      //           ],
-      //         ),
-      //       ),
-      //     ],
-      //   ),
-      // ),
+  // bottomNavigationBar: SafeArea(
+  //   child: Column(
+  //     children: [
+  //       Padding(
+  //         padding: const EdgeInsets.fromLTRB(14, 10, 14, 12),
+  //         child: Row(
+  //           children: [
+  //             Expanded(
+  //               child: OutlinedButton(
+  //                 onPressed: () => controller.clearForm(),
+  //                 child: const Text('Clear'),
+  //               ),
+  //             ),
+  //             const SizedBox(width: 8),
+  //             Expanded(
+  //               child: OutlinedButton(
+  //                 onPressed: () => _showPreview(context),
+  //                 child: const Text('Preview'),
+  //               ),
+  //             ),
+  //           ],
+  //         ),
+  //       ),
+  //       Padding(
+  //         padding: const EdgeInsets.fromLTRB(14, 10, 14, 12),
+  //         child: Row(
+  //           children: [
+  //             Expanded(
+  //               child: ElevatedButton(
+  //                 style: ElevatedButton.styleFrom(
+  //                     backgroundColor: AppColors.success),
+  //                 onPressed: () => controller.save(asDraft: false),
+  //                 child: const Text('Confirm'),
+  //               ),
+  //             ),
+  //             const SizedBox(width: 8),
+  //             Expanded(
+  //               child: ElevatedButton(
+  //                 style: ElevatedButton.styleFrom(
+  //                     backgroundColor: AppColors.magenta),
+  //                 onPressed: () => controller.save(asDraft: true),
+  //                 child: const Text('Draft'),
+  //               ),
+  //             ),
+  //           ],
+  //         ),
+  //       ),
+  //     ],
+  //   ),
+  // ),
 
   // ---- Section of items -----------------------------------------------
 
@@ -325,11 +345,81 @@ class EstimationFormView extends GetView<EstimationController> {
   Future<void> _confirmRemoveItem(int i, String productName) async {
     final confirmed = await confirmDialog(
       title: 'Remove item?',
-      message: 'Are you sure you want to remove "$productName" from this estimate?',
+      message:
+          'Are you sure you want to remove "$productName" from this estimate?',
       confirmText: 'Remove',
       danger: true,
     );
     if (confirmed) controller.removeItem(i);
+  }
+
+  // ---- Section of compliment products ------------------------------------
+
+  /// Free/no-charge products added via "+ Add Compliment Products" —
+  /// listed *last*, after Section 1/Section 2, exactly like the request:
+  /// name + quantity only, no rate/amount column, since these never
+  /// affect the estimate's total.
+  Widget _complimentBlock() {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.divider),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('Compliment Products', style: AppTextStyles.bodyStrong),
+          ...List.generate(
+              controller.complimentItems.length, (i) => _complimentItemRow(i)),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _confirmRemoveComplimentItem(int i, String productName) async {
+    final confirmed = await confirmDialog(
+      title: 'Remove compliment product?',
+      message:
+          'Are you sure you want to remove "$productName" from this estimate?',
+      confirmText: 'Remove',
+      danger: true,
+    );
+    if (confirmed) controller.removeComplimentItem(i);
+  }
+
+  Widget _complimentItemRow(int i) {
+    final item = controller.complimentItems[i];
+    return Container(
+      key: ValueKey('compliment_${item.productId}'),
+      margin: const EdgeInsets.only(top: 10),
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: AppColors.surfaceElevated,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(item.productName, style: AppTextStyles.bodyStrong),
+          ),
+          const SizedBox(width: 10),
+          _QtyStepperField(
+            key: ValueKey('compliment_qty_${item.productId}'),
+            qty: item.quantity,
+            unit: item.unit,
+            onChanged: (qty) => controller.updateComplimentQuantity(i, qty),
+          ),
+          IconButton(
+            onPressed: () => _confirmRemoveComplimentItem(i, item.productName),
+            visualDensity: VisualDensity.compact,
+            icon:
+                Icon(Icons.close_rounded, size: 18, color: AppColors.textMuted),
+          ),
+        ],
+      ),
+    );
   }
 
   Widget _itemRow(int i) {
@@ -374,8 +464,7 @@ class EstimationFormView extends GetView<EstimationController> {
             ],
           ),
           const SizedBox(height: 6),
-          Text(
-              'Rate: ₹${item.rate.toStringAsFixed(2)} / ${item.unit}',
+          Text('Rate: ₹${item.rate.toStringAsFixed(2)} / ${item.unit}',
               style: AppTextStyles.caption),
           const SizedBox(height: 6),
           Row(
@@ -501,8 +590,7 @@ class EstimationFormView extends GetView<EstimationController> {
                             .map((c) => DropdownMenuItem(
                                 value: c.id, child: Text(c.name)))
                             .toList(),
-                        onChanged: (v) =>
-                            controller.selectedChargeId.value = v,
+                        onChanged: (v) => controller.selectedChargeId.value = v,
                       ),
                     ),
                   )),
@@ -781,8 +869,9 @@ class EstimationFormView extends GetView<EstimationController> {
                   AppTextStyles.caption.copyWith(color: AppColors.textPrimary)),
         ),
         title: Text(p.name, style: AppTextStyles.bodyStrong),
-        subtitle:
-            p.phone.isEmpty ? null : Text(p.phone, style: AppTextStyles.caption),
+        subtitle: p.phone.isEmpty
+            ? null
+            : Text(p.phone, style: AppTextStyles.caption),
       ),
       onSelected: (p) => controller.selectedParty.value = p,
     );
@@ -865,6 +954,17 @@ class EstimationFormView extends GetView<EstimationController> {
     );*/
   }
 
+  void _openComplimentProductPicker(BuildContext context) {
+    if (controller.selectedPricelistId.value == null ||
+        controller.selectedPricelistId.value!.isEmpty) {
+      Get.snackbar('Select a pricelist first',
+          'Products depend on the pricelist chosen above.',
+          snackPosition: SnackPosition.BOTTOM);
+      return;
+    }
+    Get.to(() => const EstimateComplimentProductPickerView());
+  }
+
   void _showPreview(BuildContext context) {
     Get.dialog(
       AlertDialog(
@@ -898,6 +998,17 @@ class EstimationFormView extends GetView<EstimationController> {
                             ],
                           ),
                         )),
+                    if (controller.complimentItems.isNotEmpty) ...[
+                      const Divider(height: 20),
+                      Text('Compliment Products',
+                          style: AppTextStyles.bodyStrong),
+                      ...controller.complimentItems.map((c) => Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 3),
+                            child: Text(
+                                '${c.productName} x${c.quantity} ${c.unit}',
+                                style: AppTextStyles.caption),
+                          )),
+                    ],
                     const Divider(height: 20),
                     if (controller.charges.isNotEmpty) ...[
                       ...controller.charges.map((c) => Padding(
@@ -962,6 +1073,7 @@ class _GrandTotalBanner extends StatelessWidget {
     );
   }
 }
+
 /// -/+ stepper for an item row with an editable quantity field in the
 /// middle, so a large amount (50, 100, ...) can be typed directly instead
 /// of tapping + one at a time. Quantity can never go below 1 here — to
@@ -971,7 +1083,10 @@ class _QtyStepperField extends StatefulWidget {
   final String unit;
   final ValueChanged<int> onChanged;
   const _QtyStepperField(
-      {super.key, required this.qty, required this.unit, required this.onChanged});
+      {super.key,
+      required this.qty,
+      required this.unit,
+      required this.onChanged});
 
   @override
   State<_QtyStepperField> createState() => _QtyStepperFieldState();

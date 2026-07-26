@@ -143,6 +143,12 @@ class EstimationController extends GetxController {
   final Rx<String?> selectedPricelistId = Rx<String?>(null);
   final Rx<DateTime> estimationDate = Rx<DateTime>(DateTime.now());
   final formItems = <BillingItemModel>[].obs;
+
+  /// Free/no-charge "Compliment Products" added via the "+ Add
+  /// Compliment Products" button on this form — kept entirely separate
+  /// from [formItems] so they never affect [formSubTotal]/[formTotal].
+  /// See [addComplimentSelections].
+  final complimentItems = <ComplimentItemModel>[].obs;
   final section1Add = 0.0.obs;
   final section1Discount = 0.0.obs;
   final section2Add = 0.0.obs;
@@ -362,6 +368,15 @@ class EstimationController extends GetxController {
                       unit: p.unitName,
                       unitId: p.unitId,
                       section: p.productDiscount == '1' ? 1 : 2,
+                    ))
+                .toList(),
+            complimentItems: item.complimentProducts
+                .map((c) => ComplimentItemModel(
+                      productId: c.productId,
+                      productName: c.productName,
+                      quantity: int.tryParse(c.quantity) ?? 1,
+                      unit: c.unitName,
+                      unitId: c.unitId,
                     ))
                 .toList(),
             status: rowStatus,
@@ -862,6 +877,7 @@ class EstimationController extends GetxController {
     selectedPricelistId.value = null;
     estimationDate.value = DateTime.now();
     formItems.clear();
+    complimentItems.clear();
     section1Add.value = 0;
     section1Discount.value = 0;
     section2Add.value = 0;
@@ -990,6 +1006,17 @@ class EstimationController extends GetxController {
               unit: i.unit,
               unitId: i.unitId,
               section: i.section,
+            ))
+        .toList());
+
+    complimentItems.assignAll(estimation.complimentItems
+        .map((c) => ComplimentItemModel(
+              productId: c.productId,
+              productName: c.productName,
+              quantity: c.quantity,
+              unit: c.unit,
+              unitId: c.unitId,
+              isCustom: c.isCustom,
             ))
         .toList());
 
@@ -1341,6 +1368,58 @@ class EstimationController extends GetxController {
     return match?.quantity ?? 0;
   }
 
+  // ---- Form: compliment products -----------------------------------------
+
+  /// Adds/updates many free/no-charge "Compliment Products" at once from
+  /// [EstimateComplimentProductPickerView]'s "Add Compliment Products"
+  /// button — the compliment counterpart of [addProductSelections].
+  /// Unlike an ordinary line item, no rate/section is tracked; a
+  /// compliment product is just a name + quantity, kept out of every
+  /// totals calculation.
+  void addComplimentSelections(
+      List<MapEntry<EstimateProductOption, int>> selections) {
+    for (final entry in selections) {
+      final option = entry.key;
+      final qty = entry.value;
+      if (qty <= 0) continue;
+
+      final existingIndex = complimentItems
+          .indexWhere((i) => i.productId == option.productId);
+      if (existingIndex >= 0) {
+        complimentItems[existingIndex].quantity = qty;
+      } else {
+        complimentItems.add(ComplimentItemModel(
+          productId: option.productId,
+          productName: option.productName,
+          quantity: qty,
+          unit: option.unitName.isEmpty ? 'Pcs' : option.unitName,
+          unitId: option.unitId,
+          isCustom: option.isCustom,
+        ));
+      }
+    }
+    complimentItems.refresh();
+  }
+
+  /// Current quantity already on the form for [productId] among
+  /// [complimentItems] — used to pre-fill the stepper when the
+  /// compliment product picker is reopened.
+  int quantityInComplimentFor(String productId) {
+    final match =
+        complimentItems.firstWhereOrNull((i) => i.productId == productId);
+    return match?.quantity ?? 0;
+  }
+
+  void updateComplimentQuantity(int index, int qty) {
+    if (qty < 1) return;
+    complimentItems[index].quantity = qty;
+    complimentItems.refresh();
+  }
+
+  void removeComplimentItem(int index) {
+    complimentItems.removeAt(index);
+  }
+
   void updateQuantity(int index, int qty) {
     if (qty < 1) return;
     formItems[index].quantity = qty;
@@ -1364,6 +1443,7 @@ class EstimationController extends GetxController {
 
   void clearForm() {
     formItems.clear();
+    complimentItems.clear();
     selectedParty.value = null;
     selectedAgent.value = null;
     selectedAgentId.value = null;
@@ -1502,6 +1582,15 @@ class EstimationController extends GetxController {
                   value: c.value.abs().toString(),
                   name: c.name,
                 ))
+            .toList(),
+        complimentProducts: complimentItems
+            .map((c) => {
+                  'product_id': c.productId,
+                  'product_name': c.productName,
+                  'unit_id': c.unitId,
+                  'unit_name': c.unit,
+                  'product_quantity': c.quantity.toString(),
+                })
             .toList(),
       );
 
