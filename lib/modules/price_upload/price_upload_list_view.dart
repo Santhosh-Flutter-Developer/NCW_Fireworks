@@ -35,7 +35,18 @@ class PriceUploadListView extends GetView<PriceUploadController> {
         title: 'Product Price',
         actions: [
           SyncActionButton(
-            onSync: Get.find<DataSyncService>().syncPriceList,
+            // syncAllData() runs the full global sync (Party → Price
+            // Upload → Quotation → Estimation → Receipt), not just this
+            // screen's own data — see DataSyncService.syncAllData. It
+            // only pushes/pulls the cache though, so without reloading
+            // here this screen's rows wouldn't reflect the fresh sync
+            // until something else (filter change, pagination,
+            // re-entering the page) happened to call fetchPriceList()
+            // next.
+            onSync: () async {
+              await Get.find<DataSyncService>().syncAllData();
+              await controller.fetchPriceList();
+            },
           ),
         ],
         body: SingleChildScrollView(

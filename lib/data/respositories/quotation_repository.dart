@@ -343,7 +343,7 @@ class QuotationRepository {
   /// leaving them blank, same as the cache is stored per-tab.
   ///
   /// The only thing that ever calls the live `quotation_listing` endpoint
-  /// is a manual tap of the Sync button (`DataSyncService.syncQuotations`),
+  /// is a manual tap of the Sync button (`DataSyncService.syncAllData`),
   /// which fetches the full, unpaginated list for all three tabs.
   /// Browsing the list itself never hits the network — this keeps
   /// behavior identical online and offline and means a flaky connection

@@ -54,13 +54,15 @@ class _EstimationListBody extends StatelessWidget {
       title: 'Estimate',
       actions: [
         SyncActionButton(
-          // syncEstimations() only pushes/pulls the cache — it doesn't
-          // touch this screen's `estimations` list, so without reloading
-          // here the "Pending sync" badges and bill numbers would just
-          // sit there until something else (search, tab switch,
+          // syncAllData() runs the full global sync (Party → Price
+          // Upload → Quotation → Estimation → Receipt), not just this
+          // screen's own data — see DataSyncService.syncAllData. It only
+          // pushes/pulls the cache though, so without reloading here the
+          // "Pending sync" badges and bill numbers on this screen would
+          // just sit there until something else (search, tab switch,
           // re-entering the page) happened to call loadEstimates() next.
           onSync: () async {
-            await Get.find<DataSyncService>().syncEstimations();
+            await Get.find<DataSyncService>().syncAllData();
             await controller.loadEstimates();
           },
         ),

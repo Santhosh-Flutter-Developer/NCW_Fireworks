@@ -219,7 +219,7 @@ class PartyRepository {
   /// whether the device currently has internet.
   ///
   /// The only thing that ever calls the live `party_listing` endpoint is
-  /// a manual tap of the Sync button (`DataSyncService.syncParty`), which
+  /// a manual tap of the Sync button (`DataSyncService.syncAllData`), which
   /// fetches the full, unpaginated list. Browsing the list itself never
   /// hits the network — this keeps behavior identical online and offline
   /// and means a flaky connection can never cause a half-loaded list or

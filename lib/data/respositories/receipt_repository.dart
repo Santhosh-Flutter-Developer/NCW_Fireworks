@@ -342,7 +342,7 @@ class ReceiptRepository {
   /// as the cache is stored per-tab.
   ///
   /// The only thing that ever calls the live `receipt_listing` endpoint
-  /// is a manual tap of the Sync button (`DataSyncService.syncReceipts`),
+  /// is a manual tap of the Sync button (`DataSyncService.syncAllData`),
   /// which fetches the full, unpaginated list for both tabs. Browsing the
   /// list itself never hits the network — this keeps behavior identical
   /// online and offline and means a flaky connection can never cause a

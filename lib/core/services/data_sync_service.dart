@@ -12,8 +12,9 @@ import 'cache_keys.dart';
 import 'local_cache_service.dart';
 import 'session_service.dart';
 
-/// Pulls the Party / Price Upload / Quotation / Estimation / Receipt
-/// lists down from the API and caches them locally.
+/// Pushes locally-queued Party / Quotation / Estimation / Receipt changes
+/// up to the API, then pulls the Party / Price Upload / Quotation /
+/// Estimation / Receipt lists back down and caches them locally.
 ///
 /// This is now the *only* place in the app that ever calls those five
 /// list endpoints live. Every list screen's own repository method
@@ -24,12 +25,20 @@ import 'session_service.dart';
 /// `fetchLivePriceList`, etc.) that actually hits the network; those are
 /// used exclusively here, never by a list screen directly.
 ///
-/// Runs in two ways:
-/// - [syncAll] — every section, in order — once, right after a
-///   *successful online* login (see `LoginController`).
-/// - The per-page Sync button — one section at a time (`syncParty`,
-///   `syncPriceList`, `syncQuotations`, `syncEstimations`,
-///   `syncReceipts`), whenever the person taps it while online.
+/// Runs in two ways, both covering every section in the same fixed
+/// order — **Party → Price Upload → Quotation → Estimation → Receipt**:
+/// - [syncAll] — once, right after a *successful online* login (see
+///   `LoginController`).
+/// - [syncAllData] — the **single** thing every page's Sync button
+///   calls (via `SyncActionButton`), regardless of which screen it's
+///   tapped from. See its own doc comment for the upload-then-fetch
+///   ordering it guarantees.
+///
+/// There is deliberately no more "just this one section" sync — tapping
+/// Sync on, say, the Quotation screen used to only push/pull Quotation
+/// data; it now runs the exact same global process as tapping Sync
+/// anywhere else, so every screen's offline cache stays consistent no
+/// matter where the person happened to be standing.
 ///
 /// Every list endpoint here is server-paginated, but sync deliberately
 /// never sends `page_number`/`page_limit` at all — the `fetchLiveXxx`
@@ -40,10 +49,10 @@ import 'session_service.dart';
 /// needs to change.
 ///
 /// A single section failing (timeout, server hiccup mid-sync, etc.)
-/// never throws out of [syncAll] — the user is already validly logged in
-/// by the time this runs, so the worst case is "some lists are stale",
-/// not "login is broken". [lastError] surfaces the most recent failure
-/// for anyone who wants to show a subtle warning.
+/// never throws out of [syncAll]/[syncAllData] — the user is already
+/// validly logged in by the time this runs, so the worst case is "some
+/// lists are stale", not "login is broken". [lastError] surfaces the
+/// most recent failure for anyone who wants to show a subtle warning.
 class DataSyncService extends GetxService {
   DataSyncService({
     PartyRepository? partyRepository,
@@ -78,22 +87,35 @@ class DataSyncService extends GetxService {
   final statusMessage = ''.obs;
   final RxnString lastError = RxnString();
 
-  /// Runs the full sync — every section, in order. Intended to run exactly
-  /// once, right after a successful online login (see `LoginController`).
-  /// Per-module sync buttons on each list screen should call their own
-  /// `syncXxx()` method below instead of this, so tapping "Sync" on, say,
-  /// the Quotation page doesn't also re-pull Party/Price List/Estimation/
-  /// Receipt in the background.
+  /// Runs the full sync — every section, upload-then-fetch, in order.
+  /// Intended to run exactly once, right after a successful online login
+  /// (see `LoginController`). The per-page Sync button does **not** call
+  /// this — it calls [syncAllData] instead, which separates every
+  /// section's upload from its fetch so that no list gets re-pulled
+  /// until every section has had a chance to push its queued changes
+  /// first (see [syncAllData]'s doc comment for why that split matters).
   Future<void> syncAll() async {
     if (isSyncing.value) return;
     isSyncing.value = true;
     lastError.value = null;
     try {
-      await _runStep('Syncing parties…', _syncParties);
-      await _runStep('Syncing price list…', _syncPriceList);
-      await _runStep('Syncing quotations…', _syncQuotations);
-      await _runStep('Syncing estimations…', _syncEstimations);
-      await _runStep('Syncing receipts…', _syncReceipts);
+      await _runStep('Syncing parties…', () async {
+        await _uploadParty();
+        await _fetchParty();
+      });
+      await _runStep('Syncing price list…', _fetchPriceList);
+      await _runStep('Syncing quotations…', () async {
+        await _uploadQuotations();
+        await _fetchQuotations();
+      });
+      await _runStep('Syncing estimations…', () async {
+        await _uploadEstimations();
+        await _fetchEstimations();
+      });
+      await _runStep('Syncing receipts…', () async {
+        await _uploadReceipts();
+        await _fetchReceipts();
+      });
       await _cache.putString(
         CacheKeys.lastSyncedAt,
         DateTime.now().toIso8601String(),
@@ -104,66 +126,78 @@ class DataSyncService extends GetxService {
     }
   }
 
-  /// Re-syncs only the Party list's offline cache — used by the Sync
-  /// button on the Party screen.
-  Future<void> syncParty() =>
-      _syncOne('Syncing parties…', _syncParties);
-
-  /// Re-syncs only the Price List's offline cache — used by the Sync
-  /// button on the Price Upload screen.
-  Future<void> syncPriceList() =>
-      _syncOne('Syncing price list…', _syncPriceList);
-
-  /// Re-syncs only the Quotation list's offline cache (all three tabs) —
-  /// used by the Sync button on the Quotation screen. Once that (and any
-  /// queued custom products it pushed along the way) has synced
-  /// successfully, also refreshes the Price Upload cache — see
-  /// [_syncOne]'s `andThen` — so a custom product added from the
-  /// Quotation picker shows up there with no separate Sync needed.
-  Future<void> syncQuotations() => _syncOne(
-        'Syncing quotations…',
-        _syncQuotations,
-        andThen: _syncPriceList,
-      );
-
-  /// Re-syncs only the Estimation list's offline cache (all three tabs) —
-  /// used by the Sync button on the Estimate screen. Same `andThen`
-  /// price list refresh as [syncQuotations], for custom products added
-  /// from the Estimation picker.
-  Future<void> syncEstimations() => _syncOne(
-        'Syncing estimations…',
-        _syncEstimations,
-        andThen: _syncPriceList,
-      );
-
-  /// Re-syncs only the Receipt list's offline cache (both tabs) — used by
-  /// the Sync button on the Receipt screen.
-  Future<void> syncReceipts() =>
-      _syncOne('Syncing receipts…', _syncReceipts);
-
-  /// Shared guard/cleanup around a single-module sync — mirrors
-  /// [syncAll]'s isSyncing/lastError/statusMessage handling, but for just
-  /// one section instead of all five. Doesn't touch [CacheKeys.lastSyncedAt]
-  /// since that's meant to reflect a *full* sync, not a partial one.
+  /// The **single centralized global sync** — the only thing every
+  /// page's Sync button calls (via `SyncActionButton`), regardless of
+  /// which screen it's tapped from. Party page, Price Upload page,
+  /// Quotation page, Estimation page, Receipt page — Sync always runs
+  /// this exact same process, never a page-scoped subset of it.
   ///
-  /// [andThen], if given, only runs once [step] has completed without
-  /// throwing (checked via [lastError], which [_runStep] sets on
-  /// failure) — e.g. [syncQuotations]/[syncEstimations] use this to
-  /// refresh the Price Upload cache only after their own sync (including
-  /// any custom products it pushed) has actually succeeded, not when it
-  /// failed and left the queue untouched for a retry.
-  Future<void> _syncOne(
-    String label,
-    Future<void> Function() step, {
-    Future<void> Function()? andThen,
-  }) async {
+  /// Strict two-phase order:
+  ///
+  /// **Phase 1 — upload every section's queued local changes, one
+  /// section at a time, waiting for each to finish before starting the
+  /// next:**
+  /// 1. Party
+  /// 2. Price Upload *(no locally-queued data of its own today — see
+  ///    [_uploadPriceList] — so this is always a no-op, but the stage
+  ///    stays in place so the order/labels match the required
+  ///    Party → Price Upload → Quotation → Estimation → Receipt flow)*
+  /// 3. Quotation (plus any custom products a queued quotation line
+  ///    references)
+  /// 4. Estimation (plus any custom products a queued estimate line
+  ///    references)
+  /// 5. Receipt
+  ///
+  /// None of the section-specific list/GET APIs are called during this
+  /// phase — uploading Party never triggers a Party refresh, uploading
+  /// Quotation never triggers a Quotation refresh, and so on.
+  ///
+  /// **Phase 2 — only once every upload above has been attempted, fetch
+  /// every section's list from the server and re-cache it, in the same
+  /// order, exactly like the post-login fetch ([syncAll]) does:** Party,
+  /// Price Upload, Quotation, Estimation, Receipt.
+  ///
+  /// If a given section's upload fails, that section's fetch this round
+  /// is skipped — nothing to gain from re-pulling the server list before
+  /// the retry goes out, and it keeps the locally-queued (not-yet-synced)
+  /// data intact for the next Sync attempt — but every *other* section
+  /// still uploads and refreshes normally; one failure never stops the
+  /// rest of the global sync. [lastError] reflects the most recent
+  /// failure, if any, once this completes.
+  Future<void> syncAllData() async {
     if (isSyncing.value) return;
     isSyncing.value = true;
     lastError.value = null;
     try {
-      await _runStep(label, step);
-      if (lastError.value == null && andThen != null) {
-        await _runStep('Syncing price list…', andThen);
+      final partyOk =
+          await _runStep('Syncing 1/5 — Party', _uploadParty);
+      final priceOk =
+          await _runStep('Syncing 2/5 — Price Upload', _uploadPriceList);
+      final quotationOk =
+          await _runStep('Syncing 3/5 — Quotation', _uploadQuotations);
+      final estimationOk =
+          await _runStep('Syncing 4/5 — Estimation', _uploadEstimations);
+      final receiptOk =
+          await _runStep('Syncing 5/5 — Receipt', _uploadReceipts);
+
+      _announce('Refreshing latest data…');
+      if (partyOk) await _runStep('Refreshing Party…', _fetchParty);
+      if (priceOk) {
+        await _runStep('Refreshing Price Upload…', _fetchPriceList);
+      }
+      if (quotationOk) {
+        await _runStep('Refreshing Quotation…', _fetchQuotations);
+      }
+      if (estimationOk) {
+        await _runStep('Refreshing Estimation…', _fetchEstimations);
+      }
+      if (receiptOk) await _runStep('Refreshing Receipt…', _fetchReceipts);
+
+      if (lastError.value == null) {
+        await _cache.putString(
+          CacheKeys.lastSyncedAt,
+          DateTime.now().toIso8601String(),
+        );
       }
     } finally {
       isSyncing.value = false;
@@ -171,10 +205,16 @@ class DataSyncService extends GetxService {
     }
   }
 
-  Future<void> _runStep(String label, Future<void> Function() step) async {
-    statusMessage.value = label;
+  /// Runs one sync step, updating [statusMessage] with [label] first.
+  /// Returns `true` on success, `false` if [step] threw — in which case
+  /// [lastError] is set and the failure is logged, but nothing is
+  /// re-thrown, so callers (e.g. [syncAllData]'s per-section phases)
+  /// decide for themselves what a failure means for the rest of the run.
+  Future<bool> _runStep(String label, Future<void> Function() step) async {
+    _announce(label);
     try {
       await step();
+      return true;
     } catch (e, st) {
       lastError.value = e.toString();
       developer.log(
@@ -183,6 +223,7 @@ class DataSyncService extends GetxService {
         stackTrace: st,
         name: 'DataSyncService',
       );
+      return false;
     }
   }
 
@@ -193,21 +234,28 @@ class DataSyncService extends GetxService {
     statusMessage.value = message;
   }
 
-  /// Pushes anything in the pending-sync queue to `party.php` in one
-  /// batch first — this is what the Sync button actually triggers per
-  /// the offline-first design: queued adds/edits go out, and only once
-  /// that succeeds (or there was nothing queued) does the party list get
-  /// re-pulled and re-cached. If the push fails (network error, or a
-  /// business-rule rejection such as a duplicate name), this throws and
-  /// the pull below never runs — [_runStep] catches it, and the queue is
-  /// left intact for the next Sync attempt.
-  Future<void> _syncParties() async {
+  /// Pushes anything in the Party pending-sync queue to `party.php` in
+  /// one batch — this is Step 1 of the global sync (see [syncAllData]):
+  /// queued adds/edits go out; the party list is deliberately **not**
+  /// re-pulled here (that only happens in [_fetchParty], in Phase 2,
+  /// once every section has had its own upload attempted). If the push
+  /// fails (network error, or a business-rule rejection such as a
+  /// duplicate name), this throws — the caller (`_runStep`) catches it,
+  /// and the queue is left intact for the next Sync attempt.
+  Future<void> _uploadParty() async {
     _announce('Syncing parties');
     final creator = _sessionService.currentSession.value?.userId;
     if (creator != null && creator.isNotEmpty) {
       await _partyRepository.syncPendingParties(creator: creator);
     }
+  }
 
+  /// Re-pulls the full Party list from `party.php` and re-caches it —
+  /// the fetch half of Party sync (see [_uploadParty] for the upload
+  /// half). Only ever called from Phase 2 of [syncAll]/[syncAllData],
+  /// after every section's upload has been attempted.
+  Future<void> _fetchParty() async {
+    _announce('Syncing parties');
     final result = await _partyRepository.fetchLiveParties();
     // Cache every field `party_listing` gives us (not just id/name/state)
     // so editing a synced party later works entirely offline — see the
@@ -237,7 +285,25 @@ class DataSyncService extends GetxService {
     await _cache.putJsonList(CacheKeys.party, items);
   }
 
-  Future<void> _syncPriceList() async {
+  /// Step 2 of the global sync (see [syncAllData]) — Price Upload has no
+  /// locally-queued create/edit data of its own today (every row comes
+  /// straight from the server's `product_view`; see
+  /// `PriceUploadController.submitUpload`/`deleteRow`, which just report
+  /// "not available yet" rather than queuing anything), so there is
+  /// nothing to push here. Kept as its own explicit no-op step — rather
+  /// than folded into another section — so the stage order and progress
+  /// labels ("Syncing 2/5 — Price Upload") line up with the required
+  /// Party → Price Upload → Quotation → Estimation → Receipt flow, and
+  /// so a future backend endpoint for locally-added prices has an
+  /// obvious place to plug in without reshuffling anything else.
+  Future<void> _uploadPriceList() async {
+    _announce('Syncing price list');
+  }
+
+  /// Re-pulls the full Price list from `product_view` and re-caches it.
+  /// Only ever called from Phase 2 of [syncAll]/[syncAllData] — there is
+  /// no corresponding "upload" step to run first (see [_uploadPriceList]).
+  Future<void> _fetchPriceList() async {
     _announce('Syncing price list');
     final pricelists = <String, Map<String, dynamic>>{};
     final products = <String, Map<String, dynamic>>{};
@@ -265,15 +331,13 @@ class DataSyncService extends GetxService {
   }
 
   /// Pushes anything in the quotation pending-sync queue to
-  /// `quotation.php` in one batch first — this is what the Sync button
-  /// triggers per the offline-first design: queued adds/edits (draft or
-  /// confirmed) go out, and only once that succeeds (or there was
-  /// nothing queued) does the quotation list get re-pulled and
-  /// re-cached, alongside a refresh of the pricelist/product catalogue
-  /// the Add/Edit form reads offline. If the push fails, this throws and
-  /// the pull below never runs — [_runStep]/[_syncOne] catch it, and the
-  /// queue is left intact for the next Sync attempt.
-  Future<void> _syncQuotations() async {
+  /// `quotation.php` in one batch — this is Step 3 of the global sync
+  /// (see [syncAllData]): queued adds/edits (draft or confirmed) go out;
+  /// the quotation list/catalogue are deliberately **not** re-pulled
+  /// here (that only happens in [_fetchQuotations], in Phase 2). If the
+  /// push fails, this throws — the caller (`_runStep`) catches it, and
+  /// the queue is left intact for the next Sync attempt.
+  Future<void> _uploadQuotations() async {
     final creator = _sessionService.currentSession.value?.userId;
     if (creator != null && creator.isNotEmpty) {
       // Push any custom products added from either product picker first
@@ -286,7 +350,16 @@ class DataSyncService extends GetxService {
       );
       await _quotationRepository.syncPendingQuotations(creator: creator);
     }
+  }
 
+  /// Re-pulls the full Quotation list (all three tabs) from
+  /// `quotation.php` and re-caches it, alongside a refresh of the
+  /// pricelist/product catalogue the Add/Edit form reads offline — the
+  /// fetch half of Quotation sync (see [_uploadQuotations] for the
+  /// upload half). Only ever called from Phase 2 of
+  /// [syncAll]/[syncAllData], after every section's upload has been
+  /// attempted.
+  Future<void> _fetchQuotations() async {
     final parties = <String, Map<String, dynamic>>{};
 
     Future<void> syncTab(
@@ -412,16 +485,17 @@ class DataSyncService extends GetxService {
   }
 
   /// Pushes anything in the pending-sync queue to `estimate.php` in one
-  /// batch first — same reasoning as [_syncQuotations]: queued adds/edits
-  /// (including an offline Cancel) go out, and only once that succeeds
-  /// (or there was nothing queued) does the estimate list get re-pulled
-  /// and re-cached. If the push fails, this throws and the pull below
-  /// never runs — [_runStep]/[_syncOne] catch it, and the queue is left
-  /// intact for the next Sync attempt.
-  Future<void> _syncEstimations() async {
+  /// batch — this is Step 4 of the global sync (see [syncAllData]): same
+  /// reasoning as [_uploadQuotations] — queued adds/edits (including an
+  /// offline Cancel) go out; the estimate list/catalogue are
+  /// deliberately **not** re-pulled here (that only happens in
+  /// [_fetchEstimations], in Phase 2). If the push fails, this throws —
+  /// the caller (`_runStep`) catches it, and the queue is left intact
+  /// for the next Sync attempt.
+  Future<void> _uploadEstimations() async {
     final creator = _sessionService.currentSession.value?.userId;
     if (creator != null && creator.isNotEmpty) {
-      // Same reasoning as `_syncQuotations`: push any custom products
+      // Same reasoning as `_uploadQuotations`: push any custom products
       // added from either product picker (shared queue) before the
       // estimates that may reference one of them by its
       // locally-generated id.
@@ -430,7 +504,16 @@ class DataSyncService extends GetxService {
       );
       await _estimateRepository.syncPendingEstimates(creator: creator);
     }
+  }
 
+  /// Re-pulls the full Estimation list (all three tabs) from
+  /// `estimate.php` and re-caches it, alongside a refresh of the
+  /// pricelist/product catalogue the Add/Edit form reads offline — the
+  /// fetch half of Estimation sync (see [_uploadEstimations] for the
+  /// upload half). Only ever called from Phase 2 of
+  /// [syncAll]/[syncAllData], after every section's upload has been
+  /// attempted.
+  Future<void> _fetchEstimations() async {
     final agents = <String, Map<String, dynamic>>{};
     final parties = <String, Map<String, dynamic>>{};
 
@@ -584,19 +667,28 @@ class DataSyncService extends GetxService {
     await _syncCustomProductCatalogue();
   }
 
-  Future<void> _syncReceipts() async {
+  /// Step 5 of the global sync (see [syncAllData]) — pushes anything in
+  /// the receipt pending-sync queue to `receipt.php`, one receipt at a
+  /// time (see `ReceiptRepository.syncPendingReceipts` for why — no
+  /// batch endpoint like Estimate/Quotation have). The receipt
+  /// list/catalogue are deliberately **not** re-pulled here (that only
+  /// happens in [_fetchReceipts], in Phase 2). A failure here is
+  /// reported by `_runStep` like any other step, but whatever already
+  /// went through in the loop stays synced either way.
+  Future<void> _uploadReceipts() async {
     final creator = _sessionService.currentSession.value?.userId;
     if (creator != null && creator.isNotEmpty) {
-      // Sends every Receipt created offline against an estimate to
-      // `receipt.php`, one at a time (see
-      // `ReceiptRepository.syncPendingReceipts` for why — no batch
-      // endpoint like Estimate/Quotation have). A failure here is
-      // reported by `_runStep`/`_syncOne` like any other step, but
-      // whatever already went through in the loop stays synced either
-      // way.
       await _receiptRepository.syncPendingReceipts(creator: creator);
     }
+  }
 
+  /// Re-pulls the full Receipt list (both tabs) from `receipt.php` and
+  /// re-caches it, alongside a refresh of the payment mode/bank
+  /// catalogue the Add Receipt form reads offline — the fetch half of
+  /// Receipt sync (see [_uploadReceipts] for the upload half). Only ever
+  /// called from Phase 2 of [syncAll]/[syncAllData], after every
+  /// section's upload has been attempted.
+  Future<void> _fetchReceipts() async {
     final parties = <String, Map<String, dynamic>>{};
 
     Future<void> syncTab(
@@ -634,9 +726,9 @@ class DataSyncService extends GetxService {
     await _cache.putJsonList(
         CacheKeys.receiptParties, parties.values.toList());
 
-    // In case this step ran before `_syncEstimations` did (e.g. the user
-    // tapped Sync from the Receipt screen, running only this step) —
-    // keep any estimate whose receipt hasn't synced yet marked converted.
+    // In case `_fetchEstimations` hasn't re-stamped this yet this round
+    // (e.g. its own upload failed and its fetch was skipped) — keep any
+    // estimate whose receipt hasn't synced yet marked converted.
     await _receiptRepository.reapplyPendingConversions();
 
     await _syncReceiptCatalogue();

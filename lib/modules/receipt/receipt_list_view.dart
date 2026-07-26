@@ -53,13 +53,15 @@ class _ReceiptListBody extends StatelessWidget {
       title: 'Receipt',
       actions: [
         SyncActionButton(
-          // syncReceipts() only pushes/pulls the cache — it doesn't touch
-          // this screen's `receipts` list, so without reloading here the
-          // "Pending sync" badges would just sit there until something
-          // else (search, tab switch, re-entering the page) happened to
-          // call loadReceipts() next.
+          // syncAllData() runs the full global sync (Party → Price
+          // Upload → Quotation → Estimation → Receipt), not just this
+          // screen's own data — see DataSyncService.syncAllData. It only
+          // pushes/pulls the cache though, so without reloading here the
+          // "Pending sync" badges on this screen would just sit there
+          // until something else (search, tab switch, re-entering the
+          // page) happened to call loadReceipts() next.
           onSync: () async {
-            await Get.find<DataSyncService>().syncReceipts();
+            await Get.find<DataSyncService>().syncAllData();
             await controller.loadReceipts();
           },
         ),
