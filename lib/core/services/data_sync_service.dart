@@ -465,22 +465,17 @@ class DataSyncService extends GetxService {
     }
     await _cache.putJsonList(CacheKeys.quotationProducts, allProducts);
 
-    final chargeRows = <Map<String, dynamic>>[];
-    for (final charge in init.otherCharges) {
-      String type = 'Plus';
-      try {
-        final typeResult = await _quotationRepository.getChargeType(charge.id);
-        type = typeResult.chargesType;
-      } catch (_) {
-        // Keep the default "Plus" rather than failing the whole sync
-        // over one charge's type lookup.
-      }
-      chargeRows.add({
-        'other_charges_id': charge.id,
-        'other_charges_name': charge.name,
-        'charges_type': type,
-      });
-    }
+    // `other_charges` rows already carry their fixed "Plus"/"Minus" sign
+    // as `charges_type` (see `ChargeOption`) — no per-charge
+    // `type_other_charges_id` call needed.
+    final chargeRows = [
+      for (final charge in init.otherCharges)
+        {
+          'other_charges_id': charge.id,
+          'other_charges_name': charge.name,
+          'charges_type': charge.type,
+        },
+    ];
     await _cache.putJsonList(CacheKeys.quotationOtherCharges, chargeRows);
     await _syncCustomProductCatalogue();
   }
@@ -671,22 +666,17 @@ class DataSyncService extends GetxService {
     }
     await _cache.putJsonList(CacheKeys.estimationProducts, allProducts);
 
-    final chargeRows = <Map<String, dynamic>>[];
-    for (final charge in init.otherCharges) {
-      String type = 'Plus';
-      try {
-        final typeResult = await _estimateRepository.getChargeType(charge.id);
-        type = typeResult.chargesType;
-      } catch (_) {
-        // Keep the default "Plus" rather than failing the whole sync
-        // over one charge's type lookup.
-      }
-      chargeRows.add({
-        'other_charges_id': charge.id,
-        'other_charges_name': charge.name,
-        'charges_type': type,
-      });
-    }
+    // `other_charges` rows already carry their fixed "Plus"/"Minus" sign
+    // as `charges_type` (see `ChargeOption`) — no per-charge
+    // `type_other_charges_id` call needed.
+    final chargeRows = [
+      for (final charge in init.otherCharges)
+        {
+          'other_charges_id': charge.id,
+          'other_charges_name': charge.name,
+          'charges_type': charge.type,
+        },
+    ];
     await _cache.putJsonList(CacheKeys.estimationOtherCharges, chargeRows);
     await _syncCustomProductCatalogue();
   }

@@ -68,7 +68,7 @@ class QuotationController extends GetxController {
   // keeps these current). --------------------------------------------------
   final pricelistOptions = <IdName>[].obs;
   final parties = <PartyModel>[].obs;
-  final otherChargesOptions = <IdName>[].obs;
+  final otherChargesOptions = <ChargeOption>[].obs;
   final productOptions = <QuotationProductOption>[].obs;
   final isLoadingProducts = false.obs;
 
@@ -942,8 +942,8 @@ class QuotationController extends GetxController {
           hasFullDetails: p.isPending || p.hasFullDetails,
         )));
     final cachedCharges = _quotationRepository.cachedOtherCharges();
-    otherChargesOptions
-        .assignAll(cachedCharges.map((c) => IdName(id: c.id, name: c.name)));
+    otherChargesOptions.assignAll(cachedCharges
+        .map((c) => ChargeOption(id: c.id, name: c.name, type: c.type)));
     _chargeTypeById
       ..clear()
       ..addEntries(cachedCharges.map((c) => MapEntry(c.id, c.type)));
@@ -1030,9 +1030,14 @@ class QuotationController extends GetxController {
       if (result.otherCharges.isNotEmpty) {
         otherChargesOptions.assignAll(result.otherCharges);
       }
-      // The init endpoint doesn't return each charge's type — resolved
-      // lazily by [addCharge] instead when this fallback path is in use.
-      _chargeTypeById.clear();
+      // `other_charges` rows carry their own fixed "Plus"/"Minus" sign as
+      // `charges_type` (see `ChargeOption`), so it's known immediately —
+      // no live `type_other_charges_id` lookup needed even on this
+      // fallback path.
+      _chargeTypeById
+        ..clear()
+        ..addEntries(
+            result.otherCharges.map((c) => MapEntry(c.id, c.type)));
 
       final detail = result.detail;
       if (detail != null) {

@@ -149,7 +149,7 @@ class EstimateInitResponseModel {
   final List<IdName> pricelist;
   final List<IdName> agentList;
   final List<IdName> partyList;
-  final List<IdName> otherCharges;
+  final List<ChargeOption> otherCharges;
 
   const EstimateInitResponseModel({
     required this.code,
@@ -208,6 +208,27 @@ class EstimateInitResponseModel {
       return out;
     }
 
+    // `other_charges` rows carry their own fixed "Plus"/"Minus" sign as
+    // `charges_type` — read directly here so the sign is known the
+    // moment the dropdown is populated, with no separate
+    // `type_other_charges_id` call needed.
+    List<ChargeOption> readChargeOptionList(dynamic raw) {
+      final out = <ChargeOption>[];
+      if (raw is List) {
+        for (final row in raw) {
+          if (row is Map) {
+            final m = Map<String, dynamic>.from(row);
+            out.add(ChargeOption(
+              id: m['other_charges_id']?.toString() ?? '',
+              name: m['other_charges_name']?.toString() ?? '',
+              type: m['charges_type']?.toString() ?? 'Plus',
+            ));
+          }
+        }
+      }
+      return out;
+    }
+
     return EstimateInitResponseModel(
       code: code,
       message: message,
@@ -218,8 +239,7 @@ class EstimateInitResponseModel {
           readIdNameList(head['agent_list'], 'agent_id', 'agent_name'),
       partyList:
           readIdNameList(head['party_list'], 'party_id', 'party_name'),
-      otherCharges: readIdNameList(
-          head['other_charges'], 'other_charges_id', 'other_charges_name'),
+      otherCharges: readChargeOptionList(head['other_charges']),
     );
   }
 }
