@@ -603,9 +603,14 @@ class EstimationFormView extends GetView<EstimationController> {
               child: TextField(
                 controller: controller.chargeValueCtrl,
                 textAlign: TextAlign.end,
-                keyboardType:
-                    const TextInputType.numberWithOptions(decimal: true),
-                decoration: const InputDecoration(hintText: 'Value'),
+                // Plain numeric keyboard can't type '%', so switch to
+                // text to allow a percentage entry ("10%"), same as the
+                // Add/Discount fields.
+                keyboardType: TextInputType.text,
+                inputFormatters: [
+                  FilteringTextInputFormatter.allow(RegExp(r'[0-9.%]')),
+                ],
+                decoration: const InputDecoration(hintText: 'Value or %'),
               ),
             ),
             const SizedBox(width: 8),
@@ -614,8 +619,8 @@ class EstimationFormView extends GetView<EstimationController> {
               borderRadius: BorderRadius.circular(10),
               child: InkWell(
                 borderRadius: BorderRadius.circular(10),
-                onTap: () => controller.addCharge(
-                    double.tryParse(controller.chargeValueCtrl.text) ?? 0),
+                onTap: () =>
+                    controller.addCharge(controller.chargeValueCtrl.text),
                 child: const Padding(
                   padding: EdgeInsets.all(10),
                   child: Icon(Icons.add_rounded, color: Colors.white, size: 18),

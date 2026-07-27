@@ -716,14 +716,21 @@ class QuotationController extends GetxController {
 
   // ---- Form: charges ----------------------------------------------------
 
-  /// Adds the chosen other-charge with its "Plus"/"Minus" sign. Normally
-  /// read straight from [_chargeTypeById] (cached offline — see
+  /// Adds the chosen other-charge with its "Plus"/"Minus" sign.
+  /// [rawInput] accepts a plain amount ("150") or a percentage of the
+  /// subtotal-after-adjustments ("10%"), same as the Add/Discount fields
+  /// — resolved once, at add time, against the current subtotal; unlike
+  /// Add/Discount this isn't re-resolved later since each add produces a
+  /// discrete charge line rather than a live running value. The sign is
+  /// normally read straight from [_chargeTypeById] (cached offline — see
   /// [_loadDropdownDataFromCache]) with no network call; only falls back
   /// to a live `type_other_charges_id` lookup when the charge type isn't
   /// cached, which only happens on the legacy `_loadFormInit` fallback
   /// path (see its doc comment).
-  Future<void> addCharge(double rawValue) async {
+  Future<void> addCharge(String rawInput) async {
     final chargeId = selectedChargeId.value;
+    final rawValue =
+        resolvePercentOrAmount(rawInput, formSubTotal + formAdjustments);
     if (chargeId == null || rawValue == 0) {
       Get.snackbar('Select a charge', 'Choose a charge type and value',
           snackPosition: SnackPosition.BOTTOM);
