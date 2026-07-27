@@ -34,6 +34,7 @@ class EstimatePdfBuilder {
   }) async {
     final doc = pw.Document(title: 'Estimate');
     final isCancelled = estimate.status == DocStatus.cancelled;
+    final filler = _buildFiller(estimate);
 
     doc.addPage(
       pw.MultiPage(
@@ -56,6 +57,7 @@ class EstimatePdfBuilder {
           if (isCancelled) _s(_buildCancelledStamp()),
           for (final row in _buildProductRows(estimate)) _s(row),
           for (final row in _buildComplimentRows(estimate)) _s(row),
+          if (filler != null) _s(filler),
           for (final row in _buildTotals(estimate)) _s(row),
           pw.SizedBox(height: 6),
           _s(_buildDeclarationAndSignature(estimate)),
@@ -84,52 +86,93 @@ class EstimatePdfBuilder {
     return pw.Column(
       crossAxisAlignment: pw.CrossAxisAlignment.stretch,
       children: [
-        pw.Text(
-          'Estimate',
-          textAlign: pw.TextAlign.center,
-          style: pw.TextStyle(fontSize: 12, fontWeight: pw.FontWeight.bold),
-        ),
-        pw.SizedBox(height: 2),
-        pw.Center(
+        // Company block, boxed, with the GST number pinned to the top-right
+        // corner on the same line as the title (matches the reference PDF)
+        // instead of buried as another line inside the centered address.
+        pw.Container(
+          decoration: pw.BoxDecoration(
+              border: pw.Border.all(color: _borderColor, width: 0.5)),
+          padding: const pw.EdgeInsets.fromLTRB(6, 4, 6, 5),
           child: pw.Column(
-            crossAxisAlignment: pw.CrossAxisAlignment.center,
+            crossAxisAlignment: pw.CrossAxisAlignment.stretch,
             children: [
-              pw.Text(
-                CompanyProfile.name,
-                style:
-                    pw.TextStyle(fontSize: 12, fontWeight: pw.FontWeight.bold),
+              pw.Row(
+                crossAxisAlignment: pw.CrossAxisAlignment.center,
+                children: [
+                  pw.Expanded(child: pw.SizedBox()),
+                  pw.Text(
+                    'Estimate',
+                    textAlign: pw.TextAlign.center,
+                    style: pw.TextStyle(
+                        fontSize: 12, fontWeight: pw.FontWeight.bold),
+                  ),
+                  pw.Expanded(
+                    child: pw.Align(
+                      alignment: pw.Alignment.centerRight,
+                      child: pw.Text('GST : ${CompanyProfile.gstNumber}',
+                          style: const pw.TextStyle(fontSize: 9)),
+                    ),
+                  ),
+                ],
               ),
-              for (final line in CompanyProfile.addressLines)
-                pw.Text(line, style: const pw.TextStyle(fontSize: 9)),
-              pw.Text('Contact : ${CompanyProfile.contactNumber}',
-                  style: const pw.TextStyle(fontSize: 9)),
-              pw.Text('GST : ${CompanyProfile.gstNumber}',
-                  style: const pw.TextStyle(fontSize: 9)),
+              pw.SizedBox(height: 2),
+              pw.Center(
+                child: pw.Column(
+                  crossAxisAlignment: pw.CrossAxisAlignment.center,
+                  children: [
+                    pw.Text(
+                      CompanyProfile.name,
+                      style: pw.TextStyle(
+                          fontSize: 12, fontWeight: pw.FontWeight.bold),
+                    ),
+                    for (final line in CompanyProfile.addressLines)
+                      pw.Text(line, style: const pw.TextStyle(fontSize: 9)),
+                    pw.Text('Contact : ${CompanyProfile.contactNumber}',
+                        style: const pw.TextStyle(fontSize: 9)),
+                  ],
+                ),
+              ),
             ],
           ),
         ),
         pw.SizedBox(height: 4),
-        pw.Row(
-          // No stretch — see QuotationPdfBuilder's identical row for why.
-          crossAxisAlignment: pw.CrossAxisAlignment.start,
-          children: [
-            pw.Expanded(
-              child: pw.Container(
-                decoration: pw.BoxDecoration(
-                    border: pw.Border.all(color: _borderColor, width: 0.5)),
-                padding: const pw.EdgeInsets.fromLTRB(4, 3, 4, 3),
-                child: _buildBillTo(party),
+        // Bill To / Bill Date+No+HSN as ONE bordered box with a vertical
+        // divider between the two halves — rather than two independent
+        // boxes — so the outer border always reads as a single box of
+        // uniform height (the taller side, almost always "Bill To",
+        // supplies the divider's full height; see the note on
+        // crossAxisAlignment below for why this can't just be `stretch`).
+        pw.Container(
+          decoration: pw.BoxDecoration(
+              border: pw.Border.all(color: _borderColor, width: 0.5)),
+          child: pw.Row(
+            // No stretch — see QuotationPdfBuilder's identical row for why.
+            crossAxisAlignment: pw.CrossAxisAlignment.start,
+            children: [
+              pw.Expanded(
+                child: pw.Container(
+                  decoration: const pw.BoxDecoration(
+                    border: pw.Border(
+                        right:
+                            pw.BorderSide(color: _borderColor, width: 0.5)),
+                  ),
+                  padding: const pw.EdgeInsets.fromLTRB(4, 3, 4, 3),
+                  child: _buildBillTo(party),
+                ),
               ),
-            ),
-            pw.Expanded(
-              child: pw.Container(
-                decoration: pw.BoxDecoration(
-                    border: pw.Border.all(color: _borderColor, width: 0.5)),
-                padding: const pw.EdgeInsets.fromLTRB(4, 3, 4, 3),
-                child: _buildBillMeta(estimate),
+              pw.Expanded(
+                child: pw.Container(
+                  decoration: const pw.BoxDecoration(
+                    border: pw.Border(
+                        left:
+                            pw.BorderSide(color: _borderColor, width: 0.5)),
+                  ),
+                  padding: const pw.EdgeInsets.fromLTRB(4, 3, 4, 3),
+                  child: _buildBillMeta(estimate),
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ],
     );
@@ -241,6 +284,15 @@ class EstimatePdfBuilder {
   static const _colRate = 13;
   static const _colAmount = 14;
 
+  // Minimum content height for one product/compliment table row (a single
+  // line of 8pt text plus its 3+3 vertical padding). Applied as a floor,
+  // not a fixed height, so it doesn't clip a product name that wraps to
+  // two lines — but it does stop an *empty* cell (Rate/Amount on a
+  // compliment row, which has no text at all) from collapsing to just its
+  // padding and leaving its column-divider border as a short stray line
+  // instead of running the full height of the row.
+  static const _rowMinHeight = 15.0;
+
   static pw.Widget _gridCell(
     pw.Widget child, {
     required int flex,
@@ -249,6 +301,7 @@ class EstimatePdfBuilder {
     return pw.Expanded(
       flex: flex,
       child: pw.Container(
+        constraints: const pw.BoxConstraints(minHeight: _rowMinHeight),
         decoration: pw.BoxDecoration(
           border: pw.Border(
             right: isLast
@@ -432,6 +485,71 @@ class EstimatePdfBuilder {
     return rows;
   }
 
+  // ---- Filler: pad the table down so it "fit to full page" -------------
+  //
+  // The reference PDF's product/compliment table always stretches down to
+  // roughly the same point on the page — the empty space is drawn as one
+  // tall bordered block with the same S.No/Product/Qty/Rate/Amount column
+  // dividers, not left as blank white space above the totals. A `MultiPage`
+  // build() has no way to ask "how much room is left on this page", so
+  // this approximates it: budget a fixed height for the item area, subtract
+  // what the real rows already used, and fill the remainder with one tall
+  // blank row of the same grid. Only kicks in while there's meaningfully
+  // more than a row's worth of space left, and is skipped once the item
+  // list is long enough that the table would realistically already reach
+  // that point (or run onto a second page) on its own.
+  static const _tableRowHeight = 14.5;
+  static const _tableItemAreaBudget = 380.0;
+
+  static pw.Widget? _buildFiller(EstimationModel estimate) {
+    var used = _tableRowHeight + estimate.items.length * _tableRowHeight;
+    if (estimate.complimentItems.isNotEmpty) {
+      used +=
+          _tableRowHeight + estimate.complimentItems.length * _tableRowHeight;
+    }
+    final fillerHeight = _tableItemAreaBudget - used;
+    if (fillerHeight <= _tableRowHeight) return null;
+    return _fillerRow(fillerHeight);
+  }
+
+  static pw.Widget _fillerCell({required int flex, bool isLast = false}) {
+    return pw.Expanded(
+      flex: flex,
+      child: pw.Container(
+        decoration: pw.BoxDecoration(
+          border: pw.Border(
+            right: isLast
+                ? pw.BorderSide.none
+                : const pw.BorderSide(color: _borderColor, width: 0.5),
+          ),
+        ),
+      ),
+    );
+  }
+
+  static pw.Widget _fillerRow(double height) {
+    return pw.Container(
+      height: height,
+      decoration: const pw.BoxDecoration(
+        border: pw.Border(
+          left: pw.BorderSide(color: _borderColor, width: 0.5),
+          right: pw.BorderSide(color: _borderColor, width: 0.5),
+          bottom: pw.BorderSide(color: _borderColor, width: 0.5),
+        ),
+      ),
+      child: pw.Row(
+        crossAxisAlignment: pw.CrossAxisAlignment.stretch,
+        children: [
+          _fillerCell(flex: _colSNo),
+          _fillerCell(flex: _colProduct),
+          _fillerCell(flex: _colQty),
+          _fillerCell(flex: _colRate),
+          _fillerCell(flex: _colAmount, isLast: true),
+        ],
+      ),
+    );
+  }
+
   // ---- Totals: per-section add/discount, charges, then summary -------
 
   static List<pw.Widget> _buildTotals(EstimationModel estimate) {
@@ -583,6 +701,12 @@ class EstimatePdfBuilder {
 
   // ---- Declaration + signature ----------------------------------------
 
+  // Shared fixed height for both boxes below — the Declaration box used to
+  // size itself purely to its paragraph's natural height while the
+  // Signature box was pinned at 45, so the two rarely matched. Giving both
+  // the same explicit height keeps them equal regardless of content.
+  static const _declarationBoxHeight = 46.0;
+
   static pw.Widget _buildDeclarationAndSignature(EstimationModel estimate) {
     return pw.Row(
       crossAxisAlignment: pw.CrossAxisAlignment.start,
@@ -590,6 +714,7 @@ class EstimatePdfBuilder {
         pw.Expanded(
           flex: 12,
           child: pw.Container(
+            height: _declarationBoxHeight,
             decoration: pw.BoxDecoration(
                 border: pw.Border.all(color: _borderColor, width: 0.5)),
             padding: const pw.EdgeInsets.all(4),
@@ -614,7 +739,7 @@ class EstimatePdfBuilder {
         pw.Expanded(
           flex: 7,
           child: pw.Container(
-            height: 45,
+            height: _declarationBoxHeight,
             decoration: pw.BoxDecoration(
                 border: pw.Border.all(color: _borderColor, width: 0.5)),
             padding: const pw.EdgeInsets.all(4),
