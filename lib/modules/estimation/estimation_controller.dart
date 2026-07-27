@@ -22,6 +22,7 @@ import '../../data/respositories/custom_product_repository.dart';
 import '../../data/respositories/estimate_repository.dart';
 import '../../data/respositories/party_repository.dart';
 import '../../routes/app_routes.dart';
+import '../../widgets/common_widgets.dart';
 import '../quotation/quotation_controller.dart';
 import '../receipt/receipt_controller.dart';
 
@@ -805,11 +806,33 @@ class EstimationController extends GetxController {
 
   // ---- Form: pricelist / agent selection -------------------------------
 
-  void selectPricelist(IdName pricelist) {
-    if (selectedPricelistId.value == pricelist.id) return;
+  /// Switches the form's single active pricelist. An estimate may only
+  /// ever hold products (and compliment products) from one pricelist at
+  /// a time — if products are already selected under a *different*
+  /// pricelist, this asks for confirmation before dropping them and
+  /// switching. Returns whether the switch actually happened (false if
+  /// the user cancelled), so callers like the product/compliment pickers
+  /// can keep their own local state in sync.
+  Future<bool> selectPricelist(IdName pricelist) async {
+    if (selectedPricelistId.value == pricelist.id) return true;
+
+    if (formItems.isNotEmpty || complimentItems.isNotEmpty) {
+      final oldName = selectedPricelist.value ?? 'current';
+      final confirmed = await confirmDialog(
+        title: 'Switch Price List?',
+        message: 'Are you sure you want to remove the already selected '
+            "products from the '$oldName' Price List and switch to the "
+            "'${pricelist.name}' Price List?",
+      );
+      if (!confirmed) return false;
+      formItems.clear();
+      complimentItems.clear();
+    }
+
     selectedPricelistId.value = pricelist.id;
     selectedPricelist.value = pricelist.name;
     loadProductsForSelectedPricelist();
+    return true;
   }
 
   void selectAgent(IdName? agent) {

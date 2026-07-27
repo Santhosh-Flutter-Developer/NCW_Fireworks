@@ -16,7 +16,15 @@ import 'estimation_controller.dart';
 class _SelectedLine {
   final EstimateProductOption option;
   int qty;
-  _SelectedLine({required this.option, required this.qty});
+
+  /// The pricelist this selection was made under — an estimate may only
+  /// ever hold products (and compliment products) from one pricelist at
+  /// a time, so this is always the same for every entry in
+  /// [_EstimateProductPickerViewState._selections] (see
+  /// [_EstimateProductPickerViewState._selectPricelistTab]).
+  final String pricelistId;
+  _SelectedLine(
+      {required this.option, required this.qty, required this.pricelistId});
 }
 
 /// Full-screen (never a bottom sheet) product picker for the Add/Edit
@@ -67,6 +75,9 @@ class _EstimateProductPickerViewState extends State<EstimateProductPickerView> {
           currentStock: controller.stockFor(item.productId),
         ),
         qty: item.quantity,
+        // Every existing item belongs to the form's one active
+        // pricelist (enforced when it was added).
+        pricelistId: controller.selectedPricelistId.value ?? '',
       );
     }
   }
@@ -89,13 +100,47 @@ class _EstimateProductPickerViewState extends State<EstimateProductPickerView> {
       if (qty <= 0) {
         _selections.remove(option.productId);
       } else {
-        _selections[option.productId] = _SelectedLine(option: option, qty: qty);
+        _selections[option.productId] = _SelectedLine(
+          option: option,
+          qty: qty,
+          pricelistId: controller.selectedPricelistId.value ?? '',
+        );
       }
     });
   }
 
-  void _selectPricelistTab(IdName pricelist) {
-    controller.selectPricelist(pricelist);
+  /// Switches the active pricelist tab. An estimate may only ever hold
+  /// products from one pricelist, so if this screen already has
+  /// selections (committed or not yet added via "Add to Estimate") under
+  /// a *different* pricelist, confirm before dropping them — otherwise
+  /// switching tabs here could silently mix pricelists the moment "Add
+  /// to Estimate" is tapped. [EstimationController.selectPricelist]
+  /// applies the same rule to whatever's already committed to the
+  /// estimate itself (products and compliment products alike).
+  Future<void> _selectPricelistTab(IdName pricelist) async {
+    if (pricelist.id == controller.selectedPricelistId.value) return;
+
+    final hasConflictingLocalSelections =
+        _selections.values.any((l) => l.pricelistId != pricelist.id);
+
+    if (hasConflictingLocalSelections) {
+      final oldName = controller.selectedPricelist.value ?? 'current';
+      final confirmed = await confirmDialog(
+        title: 'Switch Price List?',
+        message: 'Are you sure you want to remove the already selected '
+            "products from the '$oldName' Price List and switch to the "
+            "'${pricelist.name}' Price List?",
+      );
+      if (!confirmed) return;
+      setState(() {
+        _selections.removeWhere((_, l) => l.pricelistId != pricelist.id);
+      });
+    }
+
+    // Any conflicting local selections were just resolved above, so
+    // whatever's left in the estimate's committed items already matches
+    // (or is empty) — this proceeds without asking again.
+    await controller.selectPricelist(pricelist);
   }
 
   void _addCustomProduct() {
