@@ -153,7 +153,13 @@ class EstimationModel {
   /// Kept for screens/dashboards that only care about the grand total.
   double get grandTotal => total;
 
-  int get totalQty => items.fold(0, (sum, i) => sum + i.quantity);
+  /// Paid items' quantity plus compliment items' quantity — matches the
+  /// reference report's "Total Quantity" row, which counts both.
+  /// (Compliment quantities never feed into [subTotal]/[total]; they only
+  /// add to this count.)
+  int get totalQty =>
+      items.fold(0, (sum, i) => sum + i.quantity) +
+      complimentItems.fold(0, (sum, i) => sum + i.quantity);
 
   /// e.g. "6 Case" — matches the "Bill Qty" column on the web app.
   String get qtyLabel {

@@ -55,6 +55,7 @@ class EstimatePdfBuilder {
           pw.SizedBox(height: 4),
           if (isCancelled) _s(_buildCancelledStamp()),
           for (final row in _buildProductRows(estimate)) _s(row),
+          for (final row in _buildComplimentRows(estimate)) _s(row),
           for (final row in _buildTotals(estimate)) _s(row),
           pw.SizedBox(height: 6),
           _s(_buildDeclarationAndSignature(estimate)),
@@ -348,6 +349,85 @@ class EstimatePdfBuilder {
     var index = 1;
     for (final item in estimate.items) {
       rows.add(_productRow(index++, item));
+    }
+    return rows;
+  }
+
+  // ---- Compliment Products: separate free-of-charge section -----------
+  //
+  // Rendered as its own titled section directly under the normal product
+  // table, matching the server's `rpt_estimate_a4.php` layout (see the
+  // reference PDF). S.No continues on from the paid items so numbering
+  // stays sequential across both tables. These rows deliberately carry no
+  // Rate/Amount — compliment products are free and must never affect
+  // subTotal/roundOff/total (those are computed straight from `items` in
+  // EstimationModel and are untouched by this section).
+
+  static pw.Widget _complimentTitleRow() {
+    return pw.Container(
+      alignment: pw.Alignment.center,
+      padding: const pw.EdgeInsets.symmetric(vertical: 3, horizontal: 4),
+      decoration: pw.BoxDecoration(
+        border: pw.Border.all(color: _borderColor, width: 0.5),
+      ),
+      child: pw.Text(
+        'Compliment Products',
+        style: pw.TextStyle(
+            fontSize: 8, fontWeight: pw.FontWeight.bold, color: _greenLabel),
+      ),
+    );
+  }
+
+  static pw.Widget _complimentRow(int index, ComplimentItemModel item) {
+    final cellStyle = const pw.TextStyle(fontSize: 8);
+    final isEven = index.isEven;
+
+    return pw.Container(
+      decoration: pw.BoxDecoration(
+        border: const pw.Border(
+          left: pw.BorderSide(color: _borderColor, width: 0.5),
+          right: pw.BorderSide(color: _borderColor, width: 0.5),
+          bottom: pw.BorderSide(color: _borderColor, width: 0.5),
+        ),
+        color: isEven ? null : PdfColors.grey100,
+      ),
+      child: pw.Row(
+        crossAxisAlignment: pw.CrossAxisAlignment.start,
+        children: [
+          _gridCell(
+            pw.Text('$index',
+                style: pw.TextStyle(
+                    fontSize: 8, fontWeight: pw.FontWeight.bold),
+                textAlign: pw.TextAlign.center),
+            flex: _colSNo,
+          ),
+          _gridCell(
+            pw.Text(' ${item.productName}', style: cellStyle),
+            flex: _colProduct,
+          ),
+          _gridCell(
+            pw.Text('${item.quantity}',
+                style: cellStyle, textAlign: pw.TextAlign.center),
+            flex: _colQty,
+          ),
+          // Rate/Amount columns stay blank — compliment products are free
+          // and never contribute to subTotal/roundOff/total.
+          _gridCell(pw.SizedBox(), flex: _colRate),
+          _gridCell(pw.SizedBox(), flex: _colAmount, isLast: true),
+        ],
+      ),
+    );
+  }
+
+  static List<pw.Widget> _buildComplimentRows(EstimationModel estimate) {
+    if (estimate.complimentItems.isEmpty) return [];
+
+    final rows = <pw.Widget>[_complimentTitleRow()];
+    // S.No continues on from the paid product rows above, matching the
+    // reference PDF (paid item #1, then compliment items #2, #3, ...).
+    var index = estimate.items.length + 1;
+    for (final item in estimate.complimentItems) {
+      rows.add(_complimentRow(index++, item));
     }
     return rows;
   }
