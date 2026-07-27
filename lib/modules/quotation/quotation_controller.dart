@@ -127,22 +127,30 @@ class QuotationController extends GetxController {
   final section2AddCtrl = TextEditingController();
   final section2DiscountCtrl = TextEditingController();
 
-  // Raw text last typed into the Discount fields — kept separately from
-  // section1Discount/section2Discount (which always hold the *resolved*
-  // rupee amount) so a "10%" entry can be re-resolved against the section
-  // total whenever items are added/removed/edited, not just at typing time.
+  // Raw text last typed into the Add/Discount fields — kept separately from
+  // section1Add/section1Discount/section2Add/section2Discount (which always
+  // hold the *resolved* rupee amount) so a "10%" entry can be re-resolved
+  // against the section total whenever items are added/removed/edited, not
+  // just at typing time.
+  String _section1AddRaw = '';
   String _section1DiscountRaw = '';
+  String _section2AddRaw = '';
   String _section2DiscountRaw = '';
 
   @override
   void onInit() {
     super.onInit();
-    // Re-resolve percentage-based discounts whenever the items backing a
-    // section total change (add/remove/qty edit), so e.g. "10%" always
-    // reflects 10% of the *current* section total rather than going stale.
+    // Re-resolve percentage-based add/discount values whenever the items
+    // backing a section total change (add/remove/qty edit), so e.g. "10%"
+    // always reflects 10% of the *current* section total rather than going
+    // stale.
     ever(formItems, (_) {
+      section1Add.value =
+          resolvePercentOrAmount(_section1AddRaw, formSection1Total);
       section1Discount.value =
           resolvePercentOrAmount(_section1DiscountRaw, formSection1Total);
+      section2Add.value =
+          resolvePercentOrAmount(_section2AddRaw, formSection2Total);
       section2Discount.value =
           resolvePercentOrAmount(_section2DiscountRaw, formSection2Total);
     });
@@ -159,11 +167,21 @@ class QuotationController extends GetxController {
     customUnits.assignAll(_customProductRepository.cachedUnits());
   }
 
-  /// Called from the Discount text fields on every keystroke. Accepts a
+  /// Called from the Add/Discount text fields on every keystroke. Accepts a
   /// plain amount ("150") or a percentage of the section total ("10%").
+  void setSection1AddInput(String raw) {
+    _section1AddRaw = raw;
+    section1Add.value = resolvePercentOrAmount(raw, formSection1Total);
+  }
+
   void setSection1DiscountInput(String raw) {
     _section1DiscountRaw = raw;
     section1Discount.value = resolvePercentOrAmount(raw, formSection1Total);
+  }
+
+  void setSection2AddInput(String raw) {
+    _section2AddRaw = raw;
+    section2Add.value = resolvePercentOrAmount(raw, formSection2Total);
   }
 
   void setSection2DiscountInput(String raw) {
@@ -215,10 +233,13 @@ class QuotationController extends GetxController {
     section1DiscountCtrl.text = fmt(section1Discount.value);
     section2AddCtrl.text = fmt(section2Add.value);
     section2DiscountCtrl.text = fmt(section2Discount.value);
-    // Loaded/reset discounts are always plain resolved amounts, never a
-    // percentage — keep the raw trackers in step so the next items-change
-    // re-resolve doesn't reapply a stale "%" against the new total.
+    // Loaded/reset add/discount values are always plain resolved amounts,
+    // never a percentage — keep the raw trackers in step so the next
+    // items-change re-resolve doesn't reapply a stale "%" against the new
+    // total.
+    _section1AddRaw = section1AddCtrl.text;
     _section1DiscountRaw = section1DiscountCtrl.text;
+    _section2AddRaw = section2AddCtrl.text;
     _section2DiscountRaw = section2DiscountCtrl.text;
   }
 

@@ -401,6 +401,7 @@ class QuotationFormView extends GetView<QuotationController> {
             total: controller.formSection1Total,
             addValue: controller.section1Add,
             addCtrl: controller.section1AddCtrl,
+            onAddChanged: controller.setSection1AddInput,
             discountValue: controller.section1Discount,
             discountCtrl: controller.section1DiscountCtrl,
             onDiscountChanged: controller.setSection1DiscountInput,
@@ -411,6 +412,7 @@ class QuotationFormView extends GetView<QuotationController> {
             total: controller.formSection2Total,
             addValue: controller.section2Add,
             addCtrl: controller.section2AddCtrl,
+            onAddChanged: controller.setSection2AddInput,
             discountValue: controller.section2Discount,
             discountCtrl: controller.section2DiscountCtrl,
             onDiscountChanged: controller.setSection2DiscountInput,
@@ -440,6 +442,7 @@ class QuotationFormView extends GetView<QuotationController> {
     required double total,
     required RxDouble addValue,
     required TextEditingController addCtrl,
+    required ValueChanged<String> onAddChanged,
     required RxDouble discountValue,
     required TextEditingController discountCtrl,
     required ValueChanged<String> onDiscountChanged,
@@ -459,7 +462,13 @@ class QuotationFormView extends GetView<QuotationController> {
         Row(
           children: [
             Expanded(
-              child: _valueField(label: 'Add', rx: addValue, ctrl: addCtrl),
+              child: _valueField(
+                label: 'Add',
+                rx: addValue,
+                ctrl: addCtrl,
+                allowPercent: true,
+                onChanged: onAddChanged,
+              ),
             ),
             const SizedBox(width: 10),
             Expanded(
