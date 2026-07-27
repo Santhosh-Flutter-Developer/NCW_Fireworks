@@ -825,13 +825,24 @@ class QuotationController extends GetxController {
 
   /// Loads pricelist/party dropdown options from the offline cache that
   /// [DataSyncService] refreshes at login and via Sync — no network call.
+  ///
+  /// Party options come from [PartyRepository.cachedAllParties] — every
+  /// party this device knows about (synced + still-pending) — rather
+  /// than `QuotationRepository.cachedParties()`, which only lists
+  /// parties that have already appeared on a previously-synced
+  /// quotation. That older source meant a brand-new party (or even a
+  /// synced one never yet used on a quotation) simply couldn't be
+  /// picked here.
   void _loadDropdownDataFromCache() {
     pricelistOptions.assignAll(_quotationRepository.cachedPricelists());
-    parties.assignAll(_quotationRepository.cachedParties().map((p) => PartyModel(
-          id: p.id,
-          serverPartyId: p.id,
-          name: p.name.isEmpty ? 'Untitled Party' : p.name,
-          hasFullDetails: false,
+    parties.assignAll(_partyRepository.cachedAllParties().map((p) => PartyModel(
+          id: p.isPending ? p.localId : p.partyId,
+          serverPartyId: p.partyId.isEmpty ? null : p.partyId,
+          localId: p.isPending ? p.localId : null,
+          name: p.partyName.isEmpty ? 'Untitled Party' : p.partyName,
+          phone: p.mobileNumber,
+          isPending: p.isPending,
+          hasFullDetails: p.isPending || p.hasFullDetails,
         )));
   }
 

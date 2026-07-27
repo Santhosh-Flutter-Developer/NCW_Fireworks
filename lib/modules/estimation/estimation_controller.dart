@@ -952,14 +952,25 @@ class EstimationController extends GetxController {
   /// Loads pricelist/agent/party/other-charges dropdown options from the
   /// offline cache that [DataSyncService] refreshes at login and via
   /// Sync — no network call.
+  ///
+  /// Party options come from [PartyRepository.cachedAllParties] — every
+  /// party this device knows about (synced + still-pending) — rather
+  /// than `EstimateRepository.cachedParties()`, which only lists
+  /// parties that have already appeared on a previously-synced
+  /// estimate. That older source meant a brand-new party (or even a
+  /// synced one never yet used on an estimate) simply couldn't be
+  /// picked here.
   void _loadDropdownDataFromCache() {
     pricelistOptions.assignAll(_estimateRepository.cachedPricelists());
     agentOptions.assignAll(_estimateRepository.cachedAgents());
-    parties.assignAll(_estimateRepository.cachedParties().map((p) => PartyModel(
-          id: p.id,
-          serverPartyId: p.id,
-          name: p.name.isEmpty ? 'Untitled Party' : p.name,
-          hasFullDetails: false,
+    parties.assignAll(_partyRepository.cachedAllParties().map((p) => PartyModel(
+          id: p.isPending ? p.localId : p.partyId,
+          serverPartyId: p.partyId.isEmpty ? null : p.partyId,
+          localId: p.isPending ? p.localId : null,
+          name: p.partyName.isEmpty ? 'Untitled Party' : p.partyName,
+          phone: p.mobileNumber,
+          isPending: p.isPending,
+          hasFullDetails: p.isPending || p.hasFullDetails,
         )));
     final cachedCharges = _estimateRepository.cachedOtherCharges();
     otherChargesOptions

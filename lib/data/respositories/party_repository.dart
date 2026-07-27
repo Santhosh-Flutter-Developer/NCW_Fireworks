@@ -311,6 +311,37 @@ class PartyRepository {
     return null;
   }
 
+  /// Every party this device currently knows about — every synced row
+  /// plus anything still sitting in the pending-sync queue (a pending
+  /// edit superseding its stale synced row, same rule as
+  /// [_partiesFromCache]) — with no search filter or pagination.
+  ///
+  /// This is the correct source for any "pick a party" dropdown
+  /// (Quotation/Estimation Add forms, etc): unlike
+  /// `QuotationRepository.cachedParties()`/`EstimateRepository
+  /// .cachedParties()`, which only ever list parties that have already
+  /// appeared on a *previously synced* quotation/estimate, this always
+  /// includes a party the moment it exists on this device — even one
+  /// created seconds ago and not yet synced, and even a synced party
+  /// that has never been put on a quotation/estimate before.
+  List<PartyListItem> cachedAllParties() {
+    final pendingItems = _cache
+        .getJsonList(CacheKeys.partyPending)
+        .map(PartyListItem.fromPendingRow)
+        .toList();
+
+    final supersededIds =
+        pendingItems.map((p) => p.partyId).where((id) => id.isNotEmpty).toSet();
+
+    final synced = _cache
+        .getJsonList(CacheKeys.party)
+        .map(PartyListItem.fromJson)
+        .where((p) => !supersededIds.contains(p.partyId))
+        .toList();
+
+    return [...pendingItems.reversed, ...synced];
+  }
+
   /// Builds a page of results from whatever [DataSyncService] last cached,
   /// merged with anything still sitting in the pending-sync queue,
   /// applying the same name search the server would. There's no
