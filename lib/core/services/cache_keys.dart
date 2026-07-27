@@ -43,6 +43,13 @@ class CacheKeys {
   /// the form's product picker entirely offline.
   static const quotationProducts = 'quotation_products';
 
+  /// Other-charges dropdown options for the Add/Edit Quotation form's
+  /// Charges row (`{other_charges_id, other_charges_name, charges_type}`)
+  /// — synced once at login and via Sync, same shape as
+  /// [estimationOtherCharges], so opening the form never needs the
+  /// network.
+  static const quotationOtherCharges = 'quotation_other_charges';
+
   static const estimationActive = 'estimation_active';
   static const estimationDraft = 'estimation_draft';
   static const estimationCancel = 'estimation_cancel';

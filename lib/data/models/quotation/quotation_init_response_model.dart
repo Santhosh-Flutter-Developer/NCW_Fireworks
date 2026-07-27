@@ -29,6 +29,21 @@ class QuotationDetailProductRow {
   });
 }
 
+/// One other-charge row inside an existing quotation.
+class QuotationDetailChargeRow {
+  final String chargeId;
+  final String chargeName;
+  final String type; // "Plus" or "Minus"
+  final String value;
+
+  const QuotationDetailChargeRow({
+    required this.chargeId,
+    required this.chargeName,
+    required this.type,
+    required this.value,
+  });
+}
+
 /// The existing quotation's header + line data, present when
 /// `show_quotation_id` was called with a real id. `party_id`/`pricelist_id`
 /// come through as *ids*, ready to match against [partyList]/[pricelistList].
@@ -41,6 +56,7 @@ class QuotationDetail {
   final String section1Discount;
   final String section2AddValue;
   final String section2Discount;
+  final List<QuotationDetailChargeRow> charges;
   final bool drafted;
 
   const QuotationDetail({
@@ -52,6 +68,7 @@ class QuotationDetail {
     required this.section1Discount,
     required this.section2AddValue,
     required this.section2Discount,
+    required this.charges,
     required this.drafted,
   });
 
@@ -82,6 +99,22 @@ class QuotationDetail {
           ),
     ];
 
+    final chargeIds = readStringList(json['other_charges_id']);
+    final chargeNames = readStringList(json['other_charges_name']);
+    final chargeTypes = readStringList(json['other_charges_type']);
+    final chargeValues = readStringList(json['other_charges_value']);
+
+    final charges = <QuotationDetailChargeRow>[
+      for (var i = 0; i < chargeIds.length; i++)
+        if (chargeIds[i].isNotEmpty)
+          QuotationDetailChargeRow(
+            chargeId: chargeIds[i],
+            chargeName: at(chargeNames, i),
+            type: at(chargeTypes, i),
+            value: at(chargeValues, i),
+          ),
+    ];
+
     return QuotationDetail(
       quotationDate: json['quotation_date']?.toString() ?? '',
       partyId: json['party_id']?.toString() ?? '',
@@ -91,6 +124,7 @@ class QuotationDetail {
       section1Discount: json['section1_discount']?.toString() ?? '',
       section2AddValue: json['section2_add_value']?.toString() ?? '',
       section2Discount: json['section2_discount']?.toString() ?? '',
+      charges: charges,
       drafted: json['drafted']?.toString() == '1',
     );
   }
@@ -110,6 +144,7 @@ class QuotationInitResponseModel {
   final QuotationDetail? detail;
   final List<IdName> pricelist;
   final List<IdName> partyList;
+  final List<IdName> otherCharges;
 
   const QuotationInitResponseModel({
     required this.code,
@@ -117,6 +152,7 @@ class QuotationInitResponseModel {
     required this.detail,
     required this.pricelist,
     required this.partyList,
+    required this.otherCharges,
   });
 
   bool get isSuccess => code == 200;
@@ -174,6 +210,8 @@ class QuotationInitResponseModel {
           head['pricelist'], 'pricelist_id', 'pricelist_name'),
       partyList:
           readIdNameList(head['party_list'], 'party_id', 'party_name'),
+      otherCharges: readIdNameList(
+          head['other_charges'], 'other_charges_id', 'other_charges_name'),
     );
   }
 }

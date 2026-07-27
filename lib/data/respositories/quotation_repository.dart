@@ -7,6 +7,7 @@ import '../../core/services/cache_keys.dart';
 import '../../core/services/local_cache_service.dart';
 import '../../core/utils/offline_filter_utils.dart';
 import '../models/quotation/id_name.dart';
+import '../models/quotation/quotation_charge_type_response_model.dart';
 import '../models/quotation/quotation_delete_response_model.dart';
 import '../models/quotation/quotation_init_response_model.dart';
 import '../models/quotation/quotation_list_response_model.dart';
@@ -31,6 +32,47 @@ class QuotationProductLine {
         'product_quantity': quantity,
         'product_rate': rate,
       };
+}
+
+/// One other-charge line, sent as three parallel arrays
+/// (`other_charges_id` / `other_charges_type` / `other_charges_value`) on
+/// `quotation_update`. Mirrors `EstimateChargeLine` on the Estimate side
+/// (named distinctly to avoid clashing with the app-side
+/// `QuotationChargeLine` in `quotation_model.dart`).
+class QuotationChargeUpdateLine {
+  final String chargeId;
+  final String type; // "Plus" or "Minus"
+  final String value;
+  final String name;
+
+  const QuotationChargeUpdateLine({
+    required this.chargeId,
+    required this.type,
+    required this.value,
+    this.name = '',
+  });
+
+  Map<String, dynamic> toJson() => {
+        'other_charges_id': chargeId,
+        'other_charges_name': name,
+        'other_charges_type': type,
+        'other_charges_value': value,
+      };
+}
+
+/// One other-charge option cached offline for the form's Charges row —
+/// its `type` ("Plus"/"Minus") is a fixed property of the charge itself
+/// server-side, fetched once per charge at Sync time (see
+/// [QuotationRepository.cachedOtherCharges]) instead of via a live
+/// `type_other_charges_id` call every time one is picked. Mirrors
+/// `CachedChargeOption` on the Estimate side.
+class QuotationCachedChargeOption {
+  final String id;
+  final String name;
+  final String type;
+
+  const QuotationCachedChargeOption(
+      {required this.id, required this.name, required this.type});
 }
 
 /// Talks to `quotation.php`. Every method either returns a successful,
@@ -94,6 +136,19 @@ class QuotationRepository {
           ))
       .toList();
 
+  /// Other-charges dropdown options for the form's Charges row, together
+  /// with each charge's fixed "Plus"/"Minus" type — cached once per
+  /// charge at Sync so picking a charge offline never needs
+  /// `type_other_charges_id`. Mirrors `EstimateRepository.cachedOtherCharges`.
+  List<QuotationCachedChargeOption> cachedOtherCharges() => _cache
+      .getJsonList(CacheKeys.quotationOtherCharges)
+      .map((m) => QuotationCachedChargeOption(
+            id: m['other_charges_id']?.toString() ?? '',
+            name: m['other_charges_name']?.toString() ?? '',
+            type: m['charges_type']?.toString() ?? 'Plus',
+          ))
+      .toList();
+
   /// Every product offered under [pricelistId], from the full product
   /// catalogue cached at login/Sync — backs the form's product picker
   /// with no network call.
@@ -147,6 +202,7 @@ class QuotationRepository {
     String section1Discount = '',
     String section2AddValue = '',
     String section2Discount = '',
+    List<QuotationChargeUpdateLine> charges = const [],
   }) async {
     final pending = _cache.getJsonList(CacheKeys.quotationPending);
     final row = <String, dynamic>{
@@ -166,6 +222,7 @@ class QuotationRepository {
       'section1_discount': section1Discount,
       'section2_add_value': section2AddValue,
       'section2_discount': section2Discount,
+      'charges': charges.map((c) => c.toJson()).toList(),
     };
     final updated = [
       ...pending.where((p) => p['local_id'] != localId),
@@ -299,6 +356,21 @@ class QuotationRepository {
                 'product_rate': p['product_rate'] ?? '',
               },
       ];
+
+      final rawCharges = row['charges'];
+      final chargeIds = <String>[];
+      final chargeTypes = <String>[];
+      final chargeValues = <String>[];
+      if (rawCharges is List) {
+        for (final c in rawCharges) {
+          if (c is Map) {
+            chargeIds.add(c['other_charges_id']?.toString() ?? '');
+            chargeTypes.add(c['other_charges_type']?.toString() ?? '');
+            chargeValues.add(c['other_charges_value']?.toString() ?? '');
+          }
+        }
+      }
+
       return {
         'edit_id': row['edit_id'] ?? '',
         'quotation_number': row['quotation_number'] ?? '',
@@ -313,6 +385,9 @@ class QuotationRepository {
         'section1_discount': row['section1_discount'] ?? '',
         'section2_add_value': row['section2_add_value'] ?? '',
         'section2_discount': row['section2_discount'] ?? '',
+        'other_charges_id': chargeIds,
+        'other_charges_type': chargeTypes,
+        'other_charges_value': chargeValues,
       };
     }).toList();
 
@@ -563,6 +638,24 @@ class QuotationRepository {
     throw ApiRequestException(result.message);
   }
 
+  /// Whether a chosen other-charge is added ("Plus") or deducted
+  /// ("Minus"). Only ever used now as a backward-compat fallback (see
+  /// [getFormInitData]); the normal Add/Edit flow reads this from
+  /// [cachedOtherCharges] instead. Mirrors `EstimateRepository.getChargeType`.
+  Future<QuotationChargeTypeResponseModel> getChargeType(
+    String otherChargesId,
+  ) async {
+    final json = await _apiClient.postJson(
+      ApiEndpoints.quotation,
+      body: {'type_other_charges_id': otherChargesId},
+    );
+
+    final result = QuotationChargeTypeResponseModel.fromJson(json);
+    if (result.isSuccess) return result;
+
+    throw ApiRequestException(result.message);
+  }
+
   /// Creates a new quotation, or updates an existing one when [editId] is
   /// supplied. [drafted] = `'1'` saves it as a draft (the server skips
   /// most validation and doesn't assign a bill number until it's
@@ -579,6 +672,7 @@ class QuotationRepository {
     String section1Discount = '',
     String section2AddValue = '',
     String section2Discount = '',
+    List<QuotationChargeUpdateLine> charges = const [],
   }) async {
     final body = <String, dynamic>{
       'quotation_update': '1',
@@ -594,6 +688,9 @@ class QuotationRepository {
       'section1_discount': section1Discount,
       'section2_add_value': section2AddValue,
       'section2_discount': section2Discount,
+      'other_charges_id': charges.map((c) => c.chargeId).toList(),
+      'other_charges_type': charges.map((c) => c.type).toList(),
+      'other_charges_value': charges.map((c) => c.value).toList(),
     };
 
     final json = await _apiClient.postJson(ApiEndpoints.quotation, body: body);

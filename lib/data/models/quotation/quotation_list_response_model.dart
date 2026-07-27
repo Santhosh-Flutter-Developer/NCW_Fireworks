@@ -48,6 +48,7 @@ class QuotationListItem {
   final String section1Discount;
   final String section2AddValue;
   final String section2Discount;
+  final List<QuotationDetailChargeRow> charges;
   final bool isDraft;
 
   /// True when this is a pending row queuing a Cancel made while
@@ -80,6 +81,7 @@ class QuotationListItem {
     this.section1Discount = '',
     this.section2AddValue = '',
     this.section2Discount = '',
+    this.charges = const [],
     this.isDraft = false,
     this.isCancelled = false,
     this.hasFullDetails = false,
@@ -103,6 +105,7 @@ class QuotationListItem {
       section1Discount: json['section1_discount']?.toString() ?? '',
       section2AddValue: json['section2_add_value']?.toString() ?? '',
       section2Discount: json['section2_discount']?.toString() ?? '',
+      charges: _readChargeRows(json),
       isDraft: json['drafted']?.toString() == '1',
       hasFullDetails: json['_full'] == true,
     );
@@ -132,6 +135,19 @@ class QuotationListItem {
             ),
     ];
 
+    final rawCharges = row['charges'];
+    final charges = <QuotationDetailChargeRow>[
+      if (rawCharges is List)
+        for (final c in rawCharges)
+          if (c is Map)
+            QuotationDetailChargeRow(
+              chargeId: c['other_charges_id']?.toString() ?? '',
+              chargeName: c['other_charges_name']?.toString() ?? '',
+              type: c['other_charges_type']?.toString() ?? 'Plus',
+              value: c['other_charges_value']?.toString() ?? '',
+            ),
+    ];
+
     return QuotationListItem(
       quotationId: row['edit_id']?.toString() ?? '',
       quotationNumber: row['quotation_number']?.toString() ?? '',
@@ -152,6 +168,7 @@ class QuotationListItem {
       section1Discount: row['section1_discount']?.toString() ?? '',
       section2AddValue: row['section2_add_value']?.toString() ?? '',
       section2Discount: row['section2_discount']?.toString() ?? '',
+      charges: charges,
       isDraft: row['drafted']?.toString() == '1',
       isCancelled: row['cancelled']?.toString() == '1',
       hasFullDetails: true,
@@ -183,6 +200,33 @@ class QuotationListItem {
             rate: at(rates, i),
             productDiscount: at(discountFlags, i),
             amount: at(amounts, i),
+          ),
+    ];
+  }
+
+  /// Mirrors `EstimateListItem._readChargeRows`. Some of this backend's
+  /// endpoints use the literal string `"N"` as a "not applicable"
+  /// placeholder for an empty id-like field (see `estimate_list_response_
+  /// model.dart`'s `_orEmpty` for the fuller explanation) — guarded
+  /// against here too in case `quotation_listing` ever does the same for
+  /// "no charges on this row".
+  static List<QuotationDetailChargeRow> _readChargeRows(
+      Map<String, dynamic> json) {
+    final chargeIds = readStringList(json['other_charges_id']);
+    final chargeNames = readStringList(json['other_charges_name']);
+    final chargeTypes = readStringList(json['other_charges_type']);
+    final chargeValues = readStringList(json['other_charges_value']);
+
+    String at(List<String> l, int i) => i < l.length ? l[i] : '';
+
+    return [
+      for (var i = 0; i < chargeIds.length; i++)
+        if (chargeIds[i].isNotEmpty && chargeIds[i] != 'N')
+          QuotationDetailChargeRow(
+            chargeId: chargeIds[i],
+            chargeName: at(chargeNames, i),
+            type: at(chargeTypes, i),
+            value: at(chargeValues, i),
           ),
     ];
   }

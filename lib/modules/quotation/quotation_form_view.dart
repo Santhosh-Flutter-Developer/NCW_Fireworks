@@ -419,6 +419,8 @@ class QuotationFormView extends GetView<QuotationController> {
           ),
           const Divider(height: 24),
           _summaryRow('Subtotal', controller.formSubTotal),
+          const SizedBox(height: 14),
+          _chargesSection(),
           const SizedBox(height: 6),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -434,6 +436,106 @@ class QuotationFormView extends GetView<QuotationController> {
           _summaryRow('Overall Total', controller.formTotal, isBold: true),
         ],
       ),
+    );
+  }
+
+  Widget _chargesSection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('Charges', style: AppTextStyles.caption),
+        const SizedBox(height: 6),
+        Row(
+          children: [
+            Expanded(
+              flex: 3,
+              child: Obx(() => Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10),
+                    decoration: BoxDecoration(
+                      color: AppColors.surfaceElevated,
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: AppColors.divider),
+                    ),
+                    child: DropdownButtonHideUnderline(
+                      child: DropdownButton<String>(
+                        isExpanded: true,
+                        value: controller.selectedChargeId.value,
+                        hint: Text('Select',
+                            style: AppTextStyles.body
+                                .copyWith(color: AppColors.textMuted)),
+                        dropdownColor: AppColors.surfaceElevated,
+                        style: AppTextStyles.body
+                            .copyWith(color: AppColors.textPrimary),
+                        items: controller.otherChargesOptions
+                            .map((c) => DropdownMenuItem(
+                                value: c.id, child: Text(c.name)))
+                            .toList(),
+                        onChanged: (v) => controller.selectedChargeId.value = v,
+                      ),
+                    ),
+                  )),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              flex: 2,
+              child: TextField(
+                controller: controller.chargeValueCtrl,
+                textAlign: TextAlign.end,
+                keyboardType:
+                    const TextInputType.numberWithOptions(decimal: true),
+                decoration: const InputDecoration(hintText: 'Value'),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Material(
+              color: AppColors.ember,
+              borderRadius: BorderRadius.circular(10),
+              child: InkWell(
+                borderRadius: BorderRadius.circular(10),
+                onTap: () => controller.addCharge(
+                    double.tryParse(controller.chargeValueCtrl.text) ?? 0),
+                child: const Padding(
+                  padding: EdgeInsets.all(10),
+                  child: Icon(Icons.add_rounded, color: Colors.white, size: 18),
+                ),
+              ),
+            ),
+          ],
+        ),
+        Obx(() {
+          if (controller.charges.isEmpty) return const SizedBox.shrink();
+          return Column(
+            children: List.generate(controller.charges.length, (i) {
+              final c = controller.charges[i];
+              return Padding(
+                padding: const EdgeInsets.only(top: 10),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Expanded(
+                      child: Text(c.name, style: AppTextStyles.body),
+                    ),
+                    Text(
+                      '${c.value < 0 ? '- ' : ''}₹${c.value.abs().toStringAsFixed(2)}',
+                      style: AppTextStyles.bodyStrong.copyWith(
+                        color: c.value < 0
+                            ? AppColors.danger
+                            : AppColors.textPrimary,
+                      ),
+                    ),
+                    IconButton(
+                      visualDensity: VisualDensity.compact,
+                      onPressed: () => controller.removeCharge(i),
+                      icon: Icon(Icons.delete_outline_rounded,
+                          size: 18, color: AppColors.danger),
+                    ),
+                  ],
+                ),
+              );
+            }),
+          );
+        }),
+      ],
     );
   }
 
@@ -772,6 +874,21 @@ class QuotationFormView extends GetView<QuotationController> {
                           ),
                         )),
                     const Divider(height: 20),
+                    if (controller.charges.isNotEmpty) ...[
+                      ...controller.charges.map((c) => Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 3),
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Text(c.name, style: AppTextStyles.caption),
+                                Text(
+                                    '${c.value < 0 ? '- ' : ''}₹${c.value.abs().toStringAsFixed(2)}',
+                                    style: AppTextStyles.caption),
+                              ],
+                            ),
+                          )),
+                      const Divider(height: 20),
+                    ],
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [

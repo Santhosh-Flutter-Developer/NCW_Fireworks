@@ -68,6 +68,7 @@ class QuotationController extends GetxController {
   // keeps these current). --------------------------------------------------
   final pricelistOptions = <IdName>[].obs;
   final parties = <PartyModel>[].obs;
+  final otherChargesOptions = <IdName>[].obs;
   final productOptions = <QuotationProductOption>[].obs;
   final isLoadingProducts = false.obs;
 
@@ -78,6 +79,12 @@ class QuotationController extends GetxController {
 
   List<String> get pricelistNames =>
       pricelistOptions.map((e) => e.name).toList();
+
+  /// Each cached other-charge's fixed "Plus"/"Minus" type (see
+  /// `QuotationRepository.cachedOtherCharges`) — populated whenever
+  /// dropdown data is loaded from cache, read by [addCharge] instead of a
+  /// live `type_other_charges_id` call.
+  final _chargeTypeById = <String, String>{};
 
   // ---- List screen state -------------------------------------------------
   final quotations = <QuotationModel>[].obs;
@@ -117,6 +124,8 @@ class QuotationController extends GetxController {
   final section1Discount = 0.0.obs;
   final section2Add = 0.0.obs;
   final section2Discount = 0.0.obs;
+  final charges = <QuotationChargeLine>[].obs;
+  final Rx<String?> selectedChargeId = Rx<String?>(null);
   final isLoadingForm = false.obs;
   final isSaving = false.obs;
 
@@ -126,6 +135,7 @@ class QuotationController extends GetxController {
   final section1DiscountCtrl = TextEditingController();
   final section2AddCtrl = TextEditingController();
   final section2DiscountCtrl = TextEditingController();
+  final chargeValueCtrl = TextEditingController();
 
   // Raw text last typed into the Add/Discount fields — kept separately from
   // section1Add/section1Discount/section2Add/section2Discount (which always
@@ -221,6 +231,7 @@ class QuotationController extends GetxController {
     section1DiscountCtrl.dispose();
     section2AddCtrl.dispose();
     section2DiscountCtrl.dispose();
+    chargeValueCtrl.dispose();
     super.onClose();
   }
 
@@ -354,6 +365,17 @@ class QuotationController extends GetxController {
           section1Discount: double.tryParse(item.section1Discount) ?? 0,
           section2Add: double.tryParse(item.section2AddValue) ?? 0,
           section2Discount: double.tryParse(item.section2Discount) ?? 0,
+          charges: item.charges.map((c) {
+            final magnitude = double.tryParse(c.value) ?? 0;
+            final signed =
+                c.type == 'Minus' ? -magnitude.abs() : magnitude.abs();
+            return QuotationChargeLine(
+              name: c.chargeName,
+              value: signed,
+              chargeId: c.chargeId,
+              type: c.type.isEmpty ? 'Plus' : c.type,
+            );
+          }).toList(),
           // A pending row's total/qty aren't known server-side yet — let
           // QuotationModel derive them from its own items instead of
           // reading a stale/zero server value.
@@ -678,16 +700,68 @@ class QuotationController extends GetxController {
   double get formAdjustments =>
       (section1Add.value - section1Discount.value) +
       (section2Add.value - section2Discount.value);
+  double get formChargesTotal => charges.fold(0.0, (sum, c) => sum + c.value);
 
   /// Automatically rounds the pre-round total to the nearest whole rupee —
   /// no more manual entry. Positive when the total rounds up, negative
   /// when it rounds down.
   double get roundOff {
-    final preRound = formSubTotal + formAdjustments;
+    final preRound = formSubTotal + formAdjustments + formChargesTotal;
     return double.parse((preRound.roundToDouble() - preRound).toStringAsFixed(2));
   }
 
-  double get formTotal => formSubTotal + formAdjustments + roundOff;
+  double get formTotal =>
+      formSubTotal + formAdjustments + formChargesTotal + roundOff;
+
+  // ---- Form: charges ----------------------------------------------------
+
+  /// Adds the chosen other-charge with its "Plus"/"Minus" sign. Normally
+  /// read straight from [_chargeTypeById] (cached offline — see
+  /// [_loadDropdownDataFromCache]) with no network call; only falls back
+  /// to a live `type_other_charges_id` lookup when the charge type isn't
+  /// cached, which only happens on the legacy `_loadFormInit` fallback
+  /// path (see its doc comment).
+  Future<void> addCharge(double rawValue) async {
+    final chargeId = selectedChargeId.value;
+    if (chargeId == null || rawValue == 0) {
+      Get.snackbar('Select a charge', 'Choose a charge type and value',
+          snackPosition: SnackPosition.BOTTOM);
+      return;
+    }
+    final option =
+        otherChargesOptions.firstWhereOrNull((c) => c.id == chargeId);
+    if (option == null) return;
+
+    String type;
+    final cachedType = _chargeTypeById[chargeId];
+    if (cachedType != null) {
+      type = cachedType;
+    } else {
+      try {
+        type = (await _quotationRepository.getChargeType(chargeId)).chargesType;
+      } on ApiRequestException catch (e) {
+        Get.snackbar('Could not add charge', e.message,
+            snackPosition: SnackPosition.BOTTOM);
+        return;
+      } on ApiException catch (e) {
+        Get.snackbar('Could not add charge', e.message,
+            snackPosition: SnackPosition.BOTTOM);
+        return;
+      }
+    }
+
+    final signedValue = type == 'Minus' ? -rawValue.abs() : rawValue.abs();
+    charges.add(QuotationChargeLine(
+      name: option.name,
+      value: signedValue,
+      chargeId: chargeId,
+      type: type,
+    ));
+    selectedChargeId.value = null;
+    chargeValueCtrl.clear();
+  }
+
+  void removeCharge(int index) => charges.removeAt(index);
 
   // ---- Form: pricelist selection ------------------------------------------
 
@@ -781,6 +855,8 @@ class QuotationController extends GetxController {
     section1Discount.value = 0;
     section2Add.value = 0;
     section2Discount.value = 0;
+    charges.clear();
+    selectedChargeId.value = null;
     productOptions.clear();
     _syncMoneyControllers();
   }
@@ -865,6 +941,12 @@ class QuotationController extends GetxController {
           isPending: p.isPending,
           hasFullDetails: p.isPending || p.hasFullDetails,
         )));
+    final cachedCharges = _quotationRepository.cachedOtherCharges();
+    otherChargesOptions
+        .assignAll(cachedCharges.map((c) => IdName(id: c.id, name: c.name)));
+    _chargeTypeById
+      ..clear()
+      ..addEntries(cachedCharges.map((c) => MapEntry(c.id, c.type)));
   }
 
   /// Populates the form directly from [quotation]'s own fields — used
@@ -907,6 +989,7 @@ class QuotationController extends GetxController {
     section1Discount.value = quotation.section1Discount;
     section2Add.value = quotation.section2Add;
     section2Discount.value = quotation.section2Discount;
+    charges.assignAll(quotation.charges);
     _syncMoneyControllers();
 
     if (selectedPricelistId.value != null &&
@@ -944,6 +1027,12 @@ class QuotationController extends GetxController {
               hasFullDetails: false,
             )));
       }
+      if (result.otherCharges.isNotEmpty) {
+        otherChargesOptions.assignAll(result.otherCharges);
+      }
+      // The init endpoint doesn't return each charge's type — resolved
+      // lazily by [addCharge] instead when this fallback path is in use.
+      _chargeTypeById.clear();
 
       final detail = result.detail;
       if (detail != null) {
@@ -979,6 +1068,17 @@ class QuotationController extends GetxController {
         section2Add.value = double.tryParse(detail.section2AddValue) ?? 0;
         section2Discount.value =
             double.tryParse(detail.section2Discount) ?? 0;
+
+        charges.assignAll(detail.charges.map((c) {
+          final magnitude = double.tryParse(c.value) ?? 0;
+          final signed = c.type == 'Minus' ? -magnitude.abs() : magnitude.abs();
+          return QuotationChargeLine(
+            name: c.chargeName,
+            value: signed,
+            chargeId: c.chargeId,
+            type: c.type.isEmpty ? 'Plus' : c.type,
+          );
+        }));
       } else if (pricelistOptions.isNotEmpty &&
           (selectedPricelistId.value == null ||
               selectedPricelistId.value!.isEmpty)) {
@@ -1169,6 +1269,8 @@ class QuotationController extends GetxController {
     section1Discount.value = 0;
     section2Add.value = 0;
     section2Discount.value = 0;
+    charges.clear();
+    selectedChargeId.value = null;
     _syncMoneyControllers();
   }
 
@@ -1281,6 +1383,14 @@ class QuotationController extends GetxController {
         section2Discount: section2Discount.value == 0
             ? ''
             : section2Discount.value.toString(),
+        charges: charges
+            .map((c) => QuotationChargeUpdateLine(
+                  chargeId: c.chargeId,
+                  type: c.type,
+                  value: c.value.abs().toString(),
+                  name: c.name,
+                ))
+            .toList(),
       );
 
       final wasCreate = editingQuotation == null;

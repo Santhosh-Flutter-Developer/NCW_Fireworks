@@ -404,6 +404,13 @@ class DataSyncService extends GetxService {
                 'section1_discount': q.section1Discount,
                 'section2_add_value': q.section2AddValue,
                 'section2_discount': q.section2Discount,
+                'other_charges_id':
+                    q.charges.map((c) => c.chargeId).join(','),
+                'other_charges_name':
+                    q.charges.map((c) => c.chargeName).join(','),
+                'other_charges_type': q.charges.map((c) => c.type).join(','),
+                'other_charges_value':
+                    q.charges.map((c) => c.value).join(','),
                 'drafted': q.isDraft ? '1' : '0',
                 '_full': true,
               })
@@ -428,12 +435,11 @@ class DataSyncService extends GetxService {
   }
 
   /// Refreshes the pricelist dropdown + full per-pricelist product
-  /// catalogue the Add/Edit Quotation form reads offline
-  /// (`QuotationRepository.cachedPricelists`/`cachedProductsForPricelist`).
-  /// One quick call for the pricelist list, then one call per pricelist
-  /// for its products — for the small number of pricelists a business
-  /// like this actually has, this stays fast; if that ever changes,
-  /// this is the one place to add a size guard.
+  /// catalogue + the other-charges dropdown (each charge's fixed
+  /// "Plus"/"Minus" type resolved once here) that the Add/Edit Quotation
+  /// form reads offline (`QuotationRepository.cachedPricelists`/
+  /// `cachedProductsForPricelist`/`cachedOtherCharges`). Mirrors
+  /// [_syncEstimateCatalogue].
   Future<void> _syncQuotationCatalogue() async {
     _announce('Syncing quotation product catalogue');
     final init = await _quotationRepository.getFormInitData();
@@ -458,6 +464,24 @@ class DataSyncService extends GetxService {
           }));
     }
     await _cache.putJsonList(CacheKeys.quotationProducts, allProducts);
+
+    final chargeRows = <Map<String, dynamic>>[];
+    for (final charge in init.otherCharges) {
+      String type = 'Plus';
+      try {
+        final typeResult = await _quotationRepository.getChargeType(charge.id);
+        type = typeResult.chargesType;
+      } catch (_) {
+        // Keep the default "Plus" rather than failing the whole sync
+        // over one charge's type lookup.
+      }
+      chargeRows.add({
+        'other_charges_id': charge.id,
+        'other_charges_name': charge.name,
+        'charges_type': type,
+      });
+    }
+    await _cache.putJsonList(CacheKeys.quotationOtherCharges, chargeRows);
     await _syncCustomProductCatalogue();
   }
 
