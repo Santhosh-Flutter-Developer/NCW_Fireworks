@@ -575,6 +575,7 @@ class QuotationController extends GetxController {
                 'product_quantity': i.quantity.toString(),
                 'product_rate': i.rate.toString(),
                 'product_discount': i.section == 1 ? '1' : '0',
+                'is_custom': i.isCustom ? '1' : '0',
               })
           .toList(),
       section1AddValue:
@@ -857,6 +858,12 @@ class QuotationController extends GetxController {
     }
 
     final editId = IdGenerator.generate();
+    // Same "biggest section wins" rule used once this product actually
+    // lands on the form (see [_sectionForNewCustomProduct]) — computed
+    // here too so `product.php` gets the matching `custom_product_discount`
+    // flag for this product from the moment it's queued, not just the
+    // quotation/estimate line that references it.
+    final section = _sectionForNewCustomProduct();
     await _customProductRepository.queueCustomProduct(
       editId: editId,
       categoryId: categoryId,
@@ -866,6 +873,7 @@ class QuotationController extends GetxController {
       unitName: unitName,
       pricelistId: pricelistId,
       price: price.toString(),
+      customProductDiscount: section == 1 ? '1' : '0',
     );
     await loadProductsForSelectedPricelist();
     return productOptions.firstWhereOrNull((p) => p.productId == editId);
@@ -1140,6 +1148,17 @@ class QuotationController extends GetxController {
 
   // ---- Form: line items ---------------------------------------------------
 
+  /// Section a newly-added Custom Product line should land in: whichever
+  /// section currently holds more line items (Section 1 = 3 products,
+  /// Section 2 = 1 product → lands in Section 1, and vice versa). A tie
+  /// (including an empty form) falls back to Section 2, matching a
+  /// custom product's previous fixed default.
+  int _sectionForNewCustomProduct() {
+    final section1Count = formItems.where((i) => i.section == 1).length;
+    final section2Count = formItems.where((i) => i.section == 2).length;
+    return section1Count > section2Count ? 1 : 2;
+  }
+
   /// Adds [productId] to the form. Rate/unit/section come straight from
   /// [productOptions] — already loaded for the selected pricelist by
   /// [loadProductsForSelectedPricelist], and `product_pricelist_id`
@@ -1170,7 +1189,7 @@ class QuotationController extends GetxController {
 
     // Matches the server's own rule for which totals section a line
     // lands in once saved (see quotation.php's `product_discount` check).
-    final section = option.productDiscount ? 1 : 2;
+    final section = option.isCustom ? _sectionForNewCustomProduct() : (option.productDiscount ? 1 : 2);
 
     final existingIndex = formItems.indexWhere(
         (i) => i.productId == productId && i.section == section);
@@ -1186,6 +1205,7 @@ class QuotationController extends GetxController {
         unit: option.unitName.isEmpty ? 'Pcs' : option.unitName,
         unitId: option.unitId,
         section: section,
+        isCustom: option.isCustom,
       ));
     }
   }
@@ -1212,7 +1232,7 @@ class QuotationController extends GetxController {
           productOptions.firstWhereOrNull((p) => p.productId == entry.key);
       if (option == null) continue;
 
-      final section = option.productDiscount ? 1 : 2;
+      final section = option.isCustom ? _sectionForNewCustomProduct() : (option.productDiscount ? 1 : 2);
 
       final existingIndex = formItems.indexWhere(
           (i) => i.productId == option.productId && i.section == section);
@@ -1227,6 +1247,7 @@ class QuotationController extends GetxController {
           unit: option.unitName.isEmpty ? 'Pcs' : option.unitName,
           unitId: option.unitId,
           section: section,
+          isCustom: option.isCustom,
         ));
       }
     }
@@ -1250,7 +1271,7 @@ class QuotationController extends GetxController {
       final qty = entry.value;
       if (qty <= 0) continue;
 
-      final section = option.productDiscount ? 1 : 2;
+      final section = option.isCustom ? _sectionForNewCustomProduct() : (option.productDiscount ? 1 : 2);
 
       final existingIndex = formItems.indexWhere(
           (i) => i.productId == option.productId && i.section == section);
@@ -1404,6 +1425,11 @@ class QuotationController extends GetxController {
                   // same way — matches the server's own product_discount
                   // rule, just carried locally instead of re-derived.
                   'product_discount': i.section == 1 ? '1' : '0',
+                  // Flags a Custom Product line so
+                  // [QuotationRepository.syncPendingQuotations] can send
+                  // `custom_product_discount` for it — see
+                  // [_sectionForNewCustomProduct].
+                  'is_custom': i.isCustom ? '1' : '0',
                 })
             .toList(),
         section1AddValue:

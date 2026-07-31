@@ -104,6 +104,14 @@ class CustomProductRepository {
     String unitName = '',
     required String pricelistId,
     required String price,
+    // Which totals section (1 or 2) this custom product landed in on the
+    // quotation/estimate form that created it — computed by the caller
+    // (see `QuotationController`/`EstimationController
+    // ._sectionForNewCustomProduct`) from whichever section had more
+    // products at the moment it was added. Carried through to
+    // `product.php` as `custom_product_discount` in
+    // [syncPendingCustomProducts].
+    String customProductDiscount = '0',
   }) async {
     final pending = _cache.getJsonList(CacheKeys.customProductPending);
     final row = <String, dynamic>{
@@ -115,6 +123,7 @@ class CustomProductRepository {
       'unit_name': unitName,
       'pricelist_id': pricelistId,
       'price': price,
+      'custom_product_discount': customProductDiscount,
     };
     final updated = [
       ...pending.where((p) => p['edit_id'] != editId),
@@ -163,6 +172,7 @@ class CustomProductRepository {
               'unit_id': row['unit_id'] ?? '',
               'pricelist_id': row['pricelist_id'] ?? '',
               'price': row['price'] ?? '',
+              'custom_product_discount': row['custom_product_discount'] ?? '0',
             })
         .toList();
 

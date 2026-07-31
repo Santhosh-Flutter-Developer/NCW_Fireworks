@@ -354,6 +354,13 @@ class QuotationRepository {
                 'product_id': p['product_id'] ?? '',
                 'product_quantity': p['product_quantity'] ?? '',
                 'product_rate': p['product_rate'] ?? '',
+                // Sent only for a Custom Product line (see
+                // `QuotationController._sectionForNewCustomProduct`) —
+                // mirrors `product_discount`'s 1/0 section flag, just
+                // under the name the server expects for custom rows.
+                if (p['is_custom']?.toString() == '1')
+                  'custom_product_discount':
+                      p['product_discount']?.toString() == '1' ? '1' : '0',
               },
       ];
 
