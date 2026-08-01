@@ -731,7 +731,13 @@ class ReceiptController extends GetxController {
         receiptDateIso: _serverStoredDateFormat.format(receiptDate.value),
         deduction: deductionCtrl.text.trim(),
         narration: narrationCtrl.text.trim(),
-        totalAmount: billTotalAmount.value,
+        // The server computes the receipt's stored total as the bill
+        // total minus the deduction (that's what receipt_listing returns
+        // once synced). The locally-queued row has to match that same
+        // math up front — otherwise the pending row, the Receipt list,
+        // and both PDF paths (print + download) show the un-deducted
+        // bill total until the next Sync corrects it from the server.
+        totalAmount: billTotalAmount.value - deduction,
         entries: paymentLines
             .map((l) => ReceiptPaymentEntry(
                   paymentModeId: l.paymentModeId,
