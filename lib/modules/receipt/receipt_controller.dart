@@ -118,8 +118,23 @@ class ReceiptController extends GetxController {
 
   final paymentLines = <ReceiptPaymentLine>[].obs;
 
-  double get deduction => double.tryParse(deductionCtrl.text.trim()) ?? 0;
+  /// Mirrors [deductionCtrl]'s text as a reactive value. `Obx` only
+  /// rebuilds when an `Rx` it *read* during its last build changes —
+  /// reading `deductionCtrl.text` directly (a plain `TextEditingController`)
+  /// never registers as a dependency, so the Bill Summary card's
+  /// "Balance To Pay" used to sit frozen at the un-deducted total until
+  /// something else (like adding a payment line) happened to rebuild it.
+  /// [onDeductionChanged] keeps this in sync with every keystroke so
+  /// [deduction]/[remainingForBill] update instantly instead.
+  final deductionAmount = 0.0.obs;
+
+  double get deduction => deductionAmount.value;
   double get addedTotal => paymentLines.fold(0.0, (sum, l) => sum + l.amount);
+
+  /// Wired to the Deduction field's `onChanged` — see [deductionAmount].
+  void onDeductionChanged(String value) {
+    deductionAmount.value = double.tryParse(value.trim()) ?? 0;
+  }
 
   /// Best-effort "how much of the bill is left to allocate" figure. The
   /// server doesn't expose a paid/pending breakdown on the bill-lookup
@@ -553,6 +568,7 @@ class ReceiptController extends GetxController {
     receiptDate.value = DateTime.now();
     billNumberCtrl.value.text = '';
     deductionCtrl.text = '';
+    deductionAmount.value = 0;
     narrationCtrl.text = '';
     billLookupError.value = null;
     billFoundNumber.value = '';

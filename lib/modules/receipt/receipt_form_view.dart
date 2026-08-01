@@ -92,6 +92,7 @@ class ReceiptFormView extends GetView<ReceiptController> {
             controller: controller.deductionCtrl,
             keyboardType: const TextInputType.numberWithOptions(decimal: true),
             decoration: const InputDecoration(hintText: '0'),
+            onChanged: controller.onDeductionChanged,
           ),
         ),
         const SizedBox(
@@ -376,6 +377,9 @@ class _BillSummaryCard extends StatelessWidget {
             _kv('Party', controller.billParty.value),
             _kv('Total Amount',
                 '₹${controller.billTotalAmount.value.toStringAsFixed(2)}'),
+            if (controller.deduction > 0)
+              _kv('Deduction',
+                  '- ₹${controller.deduction.toStringAsFixed(2)}'),
             _kv('Balance To Pay',
                 '₹${controller.remainingForBill.toStringAsFixed(2)}',
                 emphasize: true),
