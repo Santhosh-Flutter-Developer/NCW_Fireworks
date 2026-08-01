@@ -411,7 +411,13 @@ class _AddOrStepperState extends State<_AddOrStepper> {
   void _commit() {
     final parsed = int.tryParse(_ctrl.text.trim());
     final qty = (parsed == null || parsed < 0) ? 0 : parsed;
-    _ctrl.text = qty > 0 ? '$qty' : '';
+    final normalized = qty > 0 ? '$qty' : '';
+    // Only reassign when it actually differs (e.g. a leading zero, or
+    // clamping a negative/invalid entry to 0) — setting `.text` always
+    // collapses the cursor to the end, which would otherwise yank the
+    // caret while the user is still mid-keystroke now that this runs on
+    // every change instead of only on submit/blur.
+    if (_ctrl.text != normalized) _ctrl.text = normalized;
     if (qty != widget.qty) widget.onChanged(qty);
   }
 
@@ -460,6 +466,7 @@ class _AddOrStepperState extends State<_AddOrStepper> {
                 border: InputBorder.none,
                 contentPadding: EdgeInsets.symmetric(vertical: 4),
               ),
+              onChanged: (_) => _commit(),
               onSubmitted: (_) => _commit(),
             ),
           ),
