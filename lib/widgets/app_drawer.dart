@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 import '../core/services/offline_credential_service.dart';
 import '../core/services/session_service.dart';
 import '../core/theme/app_colors.dart';
@@ -21,6 +22,21 @@ class _AppDrawerState extends State<AppDrawer> {
   bool _creationOpen = true;
   bool _billingOpen = true;
   bool _paymentOpen = true;
+  String _versionLabel = '';
+
+  @override
+  void initState() {
+    super.initState();
+    _loadAppInfo();
+  }
+
+  Future<void> _loadAppInfo() async {
+    final info = await PackageInfo.fromPlatform();
+    if (!mounted) return;
+    setState(() {
+      _versionLabel = 'v${info.version} (${info.buildNumber})';
+    });
+  }
 
   void _go(String route) {
     Navigator.of(context).pop();
@@ -108,7 +124,21 @@ class _AppDrawerState extends State<AppDrawer> {
               ),
             ),
             _buildFooter(),
+            _buildVersion(),
           ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildVersion() {
+    if (_versionLabel.isEmpty) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12, top: 4),
+      child: Center(
+        child: Text(
+          _versionLabel,
+          style: AppTextStyles.caption.copyWith(color: AppColors.textMuted),
         ),
       ),
     );
