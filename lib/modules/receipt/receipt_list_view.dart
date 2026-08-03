@@ -578,8 +578,8 @@ class _ReceiptTile extends StatelessWidget {
 }
 
 // ---------------------------------------------------------------------------
-// Row/card actions: print, download, delete (no edit — receipts can only
-// be created or cancelled, never edited, server-side)
+// Row/card actions: print, download, share, delete (no edit — receipts can
+// only be created or cancelled, never edited, server-side)
 // ---------------------------------------------------------------------------
 
 class _ActionIcons extends StatelessWidget {
@@ -631,6 +631,12 @@ class _ActionIcons extends StatelessWidget {
           visualDensity: VisualDensity.compact,
           onPressed: () => controller.downloadReceipt(receipt),
           icon: Icon(Icons.download_rounded, color: AppColors.ember, size: 18),
+        ),
+        IconButton(
+          tooltip: 'Share',
+          visualDensity: VisualDensity.compact,
+          onPressed: () => controller.shareReceipt(receipt),
+          icon: Icon(Icons.share_rounded, color: AppColors.teal, size: 18),
         ),
          if (!_isCancelled)
         IconButton(

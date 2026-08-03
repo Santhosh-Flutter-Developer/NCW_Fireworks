@@ -6,6 +6,7 @@ import 'package:get/get.dart';
 import 'package:intl/intl.dart';
 import 'package:ncw_fireworks/core/utils/pdf/receipt_pdf_builder.dart';
 import 'package:ncw_fireworks/core/utils/pdf_downloader.dart';
+import 'package:ncw_fireworks/core/utils/share_service.dart';
 import 'package:ncw_fireworks/modules/estimation/estimation_controller.dart';
 import 'package:printing/printing.dart';
 import '../../core/network/api_exception.dart';
@@ -536,6 +537,27 @@ class ReceiptController extends GetxController {
       debugPrint('downloadReceipt failed: $e\n$st');
       _showPdfErrorDialog('Could not download', e, st);
     }
+  }
+
+  /// Shows the "Share via WhatsApp / Share via other apps" sheet, then
+  /// hands the on-device PDF to [ShareService]. See
+  /// `QuotationController.shareQuotation` / `ShareService`'s class doc.
+  /// [receipt.mobileNumber] is already the best-effort party lookup done
+  /// at load time (see the field's own doc comment), so no repository
+  /// call is needed here the way Quotation/Estimate need one.
+  Future<void> shareReceipt(ReceiptModel receipt) async {
+    await ShareService.share(
+      buildBytes: () => _buildReceiptPdfBytes(receipt),
+      fileName:
+          receipt.receiptNumber.isEmpty ? 'Receipt' : receipt.receiptNumber,
+      documentLabel: 'Receipt',
+      partyName: receipt.partyName,
+      phone: receipt.mobileNumber,
+      onBuildError: (e, st) {
+        debugPrint('shareReceipt failed: $e\n$st');
+        _showPdfErrorDialog('Could not share', e, st);
+      },
+    );
   }
 
   /// See `EstimationController._showPdfErrorDialog` — a Snackbar

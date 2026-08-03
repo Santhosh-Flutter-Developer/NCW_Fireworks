@@ -740,6 +740,12 @@ class _ActionIcons extends StatelessWidget {
           onPressed: () => controller.downloadEstimate(estimation),
           icon: Icon(Icons.download_rounded, color: AppColors.ember, size: 18),
         ),
+        IconButton(
+          tooltip: 'Share',
+          visualDensity: VisualDensity.compact,
+          onPressed: () => controller.shareEstimate(estimation),
+          icon: Icon(Icons.share_rounded, color: AppColors.teal, size: 18),
+        ),
         if (!isConverted) ...[
           if (!_isCancelled && !_isDraft)
           IconButton(

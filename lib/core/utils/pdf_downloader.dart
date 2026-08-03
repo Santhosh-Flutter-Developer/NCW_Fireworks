@@ -52,6 +52,12 @@ class PdfDownloader {
     await saveBytes(bytes: Uint8List.fromList(bytes), fileName: fileName);
   }
 
+  /// Public wrapper around [_sanitizeFileName] — reused by `ShareService`
+  /// so a shared PDF's temp-file/attachment name gets the same
+  /// filesystem-safe treatment as a downloaded one (bill numbers like
+  /// "EST021/26-27" contain characters most platforms reject in a name).
+  static String sanitizeFileName(String name) => _sanitizeFileName(name);
+
   /// Saves already-generated PDF bytes to disk — shared by [download]
   /// (network-fetched bytes) and by any report built entirely on-device
   /// (e.g. `QuotationPdfBuilder`, which never touches the network at all).

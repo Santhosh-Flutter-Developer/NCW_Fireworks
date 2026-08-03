@@ -6,6 +6,7 @@ import 'package:get/get.dart';
 import 'package:intl/intl.dart';
 import 'package:ncw_fireworks/core/utils/pdf/estimate_pdf_builder.dart';
 import 'package:ncw_fireworks/core/utils/pdf_downloader.dart';
+import 'package:ncw_fireworks/core/utils/share_service.dart';
 import 'package:printing/printing.dart';
 import '../../core/network/api_exception.dart';
 import '../../core/services/session_service.dart';
@@ -675,6 +676,26 @@ class EstimationController extends GetxController {
       debugPrint('downloadEstimate failed: $e\n$st');
       _showPdfErrorDialog('Could not download', e, st);
     }
+  }
+
+  /// Shows the "Share via WhatsApp / Share via other apps" sheet, then
+  /// hands the on-device PDF to [ShareService]. See
+  /// `QuotationController.shareQuotation` / `ShareService`'s class doc.
+  Future<void> shareEstimate(EstimationModel estimation) async {
+    final party = _partyRepository.cachedPartyById(estimation.partyId);
+    await ShareService.share(
+      buildBytes: () => _buildEstimatePdfBytes(estimation),
+      fileName: estimation.estimationNo.isEmpty
+          ? 'Estimate'
+          : estimation.estimationNo,
+      documentLabel: 'Estimate',
+      partyName: estimation.partyName,
+      phone: party?.mobileNumber,
+      onBuildError: (e, st) {
+        debugPrint('shareEstimate failed: $e\n$st');
+        _showPdfErrorDialog('Could not share', e, st);
+      },
+    );
   }
 
   /// See `QuotationController._showPdfErrorDialog` — a Snackbar

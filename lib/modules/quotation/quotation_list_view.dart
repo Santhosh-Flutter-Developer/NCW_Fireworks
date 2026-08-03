@@ -623,7 +623,7 @@ class _QuotationTile extends StatelessWidget {
 }
 
 // ---------------------------------------------------------------------------
-// Row/card actions: print, download, convert, edit, delete
+// Row/card actions: print, download, share, convert, edit, delete
 // ---------------------------------------------------------------------------
 
 class _ActionIcons extends StatelessWidget {
@@ -653,6 +653,12 @@ class _ActionIcons extends StatelessWidget {
           onPressed: () => controller.downloadQuotation(quotation),
           icon: Icon(Icons.file_download_rounded,
               color: AppColors.skyBlue, size: 18),
+        ),
+        IconButton(
+          tooltip: 'Share',
+          visualDensity: VisualDensity.compact,
+          onPressed: () => controller.shareQuotation(quotation),
+          icon: Icon(Icons.share_rounded, color: AppColors.teal, size: 18),
         ),
         if (!isConverted) ...[
           if (!isCancelled && !isDraft)

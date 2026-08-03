@@ -6,6 +6,7 @@ import 'package:get/get.dart';
 import 'package:intl/intl.dart';
 import 'package:ncw_fireworks/core/utils/pdf/quotation_pdf_builder.dart';
 import 'package:ncw_fireworks/core/utils/pdf_downloader.dart';
+import 'package:ncw_fireworks/core/utils/share_service.dart';
 import 'package:printing/printing.dart';
 import '../../core/network/api_exception.dart';
 import '../../core/services/session_service.dart';
@@ -636,6 +637,26 @@ class QuotationController extends GetxController {
       debugPrint('downloadQuotation failed: $e\n$st');
       _showPdfErrorDialog('Could not download', e, st);
     }
+  }
+
+  /// Opens the native share sheet with the on-device PDF attached — see
+  /// [_buildQuotationPdfBytes] and `ShareService`'s class doc for what
+  /// "offline" covers here, and for why a "Preparing…" overlay covers
+  /// the build time and repeat taps are ignored while it's in progress.
+  Future<void> shareQuotation(QuotationModel quotation) async {
+    final party = _partyRepository.cachedPartyById(quotation.partyId);
+    await ShareService.share(
+      buildBytes: () => _buildQuotationPdfBytes(quotation),
+      fileName:
+          quotation.quotationNo.isEmpty ? 'Quotation' : quotation.quotationNo,
+      documentLabel: 'Quotation',
+      partyName: quotation.partyName,
+      phone: party?.mobileNumber,
+      onBuildError: (e, st) {
+        debugPrint('shareQuotation failed: $e\n$st');
+        _showPdfErrorDialog('Could not share', e, st);
+      },
+    );
   }
 
   /// A Snackbar truncates long text, which has repeatedly hidden the
