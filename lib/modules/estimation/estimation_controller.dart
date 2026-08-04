@@ -698,6 +698,25 @@ class EstimationController extends GetxController {
     );
   }
 
+  /// Same PDF as [shareEstimate], but opens straight on this party's
+  /// WhatsApp chat — see `ShareService.shareToWhatsApp`.
+  Future<void> shareEstimateToWhatsApp(EstimationModel estimation) async {
+    final party = _partyRepository.cachedPartyById(estimation.partyId);
+    await ShareService.shareToWhatsApp(
+      buildBytes: () => _buildEstimatePdfBytes(estimation),
+      fileName: estimation.estimationNo.isEmpty
+          ? 'Estimate'
+          : estimation.estimationNo,
+      documentLabel: 'Estimate',
+      partyName: estimation.partyName,
+      phone: party?.mobileNumber,
+      onBuildError: (e, st) {
+        debugPrint('shareEstimateToWhatsApp failed: $e\n$st');
+        _showPdfErrorDialog('Could not share', e, st);
+      },
+    );
+  }
+
   /// See `QuotationController._showPdfErrorDialog` — a Snackbar
   /// truncates long text, which hid the actual exception behind a
   /// generic message more than once; this shows the full error (and

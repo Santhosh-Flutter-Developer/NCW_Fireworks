@@ -560,6 +560,23 @@ class ReceiptController extends GetxController {
     );
   }
 
+  /// Same PDF as [shareReceipt], but opens straight on this party's
+  /// WhatsApp chat — see `ShareService.shareToWhatsApp`.
+  Future<void> shareReceiptToWhatsApp(ReceiptModel receipt) async {
+    await ShareService.shareToWhatsApp(
+      buildBytes: () => _buildReceiptPdfBytes(receipt),
+      fileName:
+          receipt.receiptNumber.isEmpty ? 'Receipt' : receipt.receiptNumber,
+      documentLabel: 'Receipt',
+      partyName: receipt.partyName,
+      phone: receipt.mobileNumber,
+      onBuildError: (e, st) {
+        debugPrint('shareReceiptToWhatsApp failed: $e\n$st');
+        _showPdfErrorDialog('Could not share', e, st);
+      },
+    );
+  }
+
   /// See `EstimationController._showPdfErrorDialog` — a Snackbar
   /// truncates long text, which can hide the actual exception behind a
   /// generic message; this shows the full error (and stack trace,

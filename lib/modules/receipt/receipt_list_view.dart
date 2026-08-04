@@ -638,6 +638,9 @@ class _ActionIcons extends StatelessWidget {
           onPressed: () => controller.shareReceipt(receipt),
           icon: Icon(Icons.share_rounded, color: AppColors.teal, size: 18),
         ),
+        WhatsAppIconButton(
+          onPressed: () => controller.shareReceiptToWhatsApp(receipt),
+        ),
          if (!_isCancelled)
         IconButton(
           tooltip: 'Cancel',

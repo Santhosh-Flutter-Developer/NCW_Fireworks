@@ -659,6 +659,26 @@ class QuotationController extends GetxController {
     );
   }
 
+  /// Same PDF as [shareQuotation], but opens straight on this party's
+  /// WhatsApp chat instead of the generic OS share sheet — see
+  /// `ShareService.shareToWhatsApp` for exactly what "straight to the
+  /// chat" does and doesn't guarantee, and for offline behaviour.
+  Future<void> shareQuotationToWhatsApp(QuotationModel quotation) async {
+    final party = _partyRepository.cachedPartyById(quotation.partyId);
+    await ShareService.shareToWhatsApp(
+      buildBytes: () => _buildQuotationPdfBytes(quotation),
+      fileName:
+          quotation.quotationNo.isEmpty ? 'Quotation' : quotation.quotationNo,
+      documentLabel: 'Quotation',
+      partyName: quotation.partyName,
+      phone: party?.mobileNumber,
+      onBuildError: (e, st) {
+        debugPrint('shareQuotationToWhatsApp failed: $e\n$st');
+        _showPdfErrorDialog('Could not share', e, st);
+      },
+    );
+  }
+
   /// A Snackbar truncates long text, which has repeatedly hidden the
   /// actual exception behind a generic "Unable to generate..." message —
   /// this shows the full error (and a copy button for the stack trace)

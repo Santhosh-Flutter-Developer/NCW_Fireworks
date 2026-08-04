@@ -2,8 +2,9 @@ import 'dart:async';
 import 'dart:io';
 import 'dart:typed_data';
 
-import 'package:flutter/foundation.dart' show kIsWeb, debugPrint;
+import 'package:flutter/foundation.dart' show kIsWeb, debugPrint, defaultTargetPlatform, TargetPlatform;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show MethodChannel, PlatformException;
 import 'package:get/get.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
@@ -75,8 +76,9 @@ class ShareService {
   /// [partyName] personalizes the message text that comes pre-filled
   /// alongside the PDF; pass `null`/empty if it isn't known. [phone] is
   /// accepted for forward-compatibility (and because callers already
-  /// have it on hand) but isn't currently used for anything, now that
-  /// there's no WhatsApp-specific priming step — see the class doc.
+  /// have it on hand) but isn't used by this generic [share] path, now
+  /// that there's no WhatsApp-specific priming step here — see the class
+  /// doc. [shareToWhatsApp] below is the one that actually uses [phone].
   /// [onBuildError], if given, is called instead of a generic snackbar
   /// when [buildBytes] itself throws — callers with a richer error
   /// dialog (e.g. `QuotationController._showPdfErrorDialog`) can pass it
@@ -166,6 +168,141 @@ class ShareService {
       }
       _busy = false;
     }
+  }
+
+  /// Talks to `WhatsAppShareHelper.kt` (Android only) — see that file's
+  /// class doc for exactly what it does and doesn't guarantee.
+  static const _whatsAppChannel = MethodChannel('ncw_fireworks/whatsapp_share');
+
+  /// Same as [share], but goes straight to a single party's WhatsApp
+  /// chat instead of the generic "share via..." OS sheet — used by the
+  /// WhatsApp icon on the Quotation/Estimation/Receipt list rows.
+  ///
+  /// This works fully offline right up to the moment of actually
+  /// tapping "send" inside WhatsApp, exactly like [share] — the PDF is
+  /// built on-device, and opening WhatsApp on a specific chat doesn't
+  /// require connectivity either (WhatsApp itself queues the message if
+  /// the device is offline when send is tapped).
+  ///
+  /// Direct-to-chat targeting (skipping WhatsApp's own contact picker)
+  /// is Android-only and best-effort — see `WhatsAppShareHelper.kt`.
+  /// On iOS, or if the direct attempt fails for any reason (WhatsApp
+  /// not installed, no phone number on file, a platform quirk), this
+  /// falls back to the same generic share sheet as [share] so the user
+  /// can still pick WhatsApp from there manually.
+  static Future<void> shareToWhatsApp({
+    required Future<Uint8List> Function() buildBytes,
+    required String fileName,
+    required String documentLabel,
+    String? partyName,
+    String? phone,
+    void Function(Object error, StackTrace stackTrace)? onBuildError,
+  }) async {
+    if (_busy) {
+      return;
+    }
+    _busy = true;
+
+    var overlayShown = false;
+    final overlayTimer = Timer(_overlayDelay, () {
+      overlayShown = true;
+      Get.dialog(
+        const _PreparingOverlay(),
+        barrierDismissible: false,
+        transitionDuration: Duration.zero,
+      );
+    });
+    void closeOverlayIfShown() {
+      overlayTimer.cancel();
+      if (overlayShown) {
+        Get.back();
+        overlayShown = false;
+      }
+    }
+
+    try {
+      final Uint8List bytes;
+      try {
+        bytes = await buildBytes();
+      } catch (e, st) {
+        debugPrint('ShareService: failed to build PDF: $e\n$st');
+        closeOverlayIfShown();
+        if (onBuildError != null) {
+          onBuildError(e, st);
+        } else {
+          Get.snackbar(
+            'Could not share',
+            'Something went wrong preparing the PDF: $e',
+            snackPosition: SnackPosition.BOTTOM,
+          );
+        }
+        return;
+      }
+
+      final message = _messageFor(documentLabel, fileName, partyName);
+      final safeName = PdfDownloader.sanitizeFileName(fileName);
+      final normalizedPhone = _normalizePhone(phone);
+
+      try {
+        final file = await _prepareFile(bytes, safeName);
+        closeOverlayIfShown();
+
+        var wentDirectToWhatsApp = false;
+        if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
+          try {
+            await _whatsAppChannel.invokeMethod<bool>('shareFileToChat', {
+              'filePath': file.path,
+              'phone': normalizedPhone,
+              'message': message,
+            });
+            wentDirectToWhatsApp = true;
+          } on PlatformException catch (e) {
+            // 'not_installed' or any native-side hiccup -> fall through
+            // to the generic share sheet below.
+            debugPrint('ShareService: direct WhatsApp share failed '
+                '(${e.code}), falling back to share sheet: ${e.message}');
+          }
+        }
+
+        if (!wentDirectToWhatsApp) {
+          final result = await Share.shareXFiles([file],
+              text: message, subject: safeName);
+          if (result.status == ShareResultStatus.unavailable) {
+            throw Exception('Sharing is not available on this device.');
+          }
+        }
+      } catch (e, st) {
+        debugPrint(
+            'ShareService: WhatsApp share failed, falling back to download: $e\n$st');
+        closeOverlayIfShown();
+        await _fallbackToDownload(bytes: bytes, fileName: safeName);
+      }
+    } finally {
+      overlayTimer.cancel();
+      if (overlayShown) {
+        try {
+          Get.back();
+        } catch (_) {}
+      }
+      _busy = false;
+    }
+  }
+
+  /// Best-effort normalization to "country code + number, digits only"
+  /// (e.g. "9876543210" -> "919876543210"), which is the form WhatsApp
+  /// expects for both `wa.me` links and the `jid` extra. Assumes India
+  /// (+91) for bare 10-digit numbers, since that's this app's userbase;
+  /// numbers that already include a country code are left as-is.
+  /// Returns null if there's nothing usable to normalize.
+  static String? _normalizePhone(String? raw) {
+    if (raw == null) return null;
+    final digits = raw.replaceAll(RegExp(r'[^0-9]'), '');
+    if (digits.isEmpty) return null;
+    if (digits.length == 10) return '91$digits';
+    if (digits.length == 11 && digits.startsWith('0')) {
+      return '91${digits.substring(1)}';
+    }
+    return digits;
   }
 
   /// Resolved once per app session and reused — [getTemporaryDirectory]

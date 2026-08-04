@@ -32,6 +32,20 @@
         <meta-data
             android:name="flutterEmbedding"
             android:value="2" />
+
+        <!-- FileProvider used to hand the on-device Quotation/Estimate/Receipt
+             PDF to WhatsApp as a content:// uri (WhatsApp, like any other app
+             on Android 7+, can't be given a raw file:// path) — see
+             WhatsAppShareHelper.kt for how it's used. -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.ncwfireworks.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/ncw_file_paths" />
+        </provider>
     </application>
     <!-- Required to query activities that can process text, see:
          https://developer.android.com/training/package-visibility and
@@ -49,5 +63,10 @@
             <action android:name="android.intent.action.VIEW" />
             <data android:scheme="https" />
         </intent>
+        <!-- Required so the app can detect/target WhatsApp (personal and
+             Business) for the "Share to WhatsApp" icon on Android 11+,
+             which hides package info from apps by default. -->
+        <package android:name="com.whatsapp" />
+        <package android:name="com.whatsapp.w4b" />
     </queries>
 </manifest>
